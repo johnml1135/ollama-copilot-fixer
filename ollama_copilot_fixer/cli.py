@@ -236,13 +236,9 @@ def main(argv: list[str] | None = None) -> int:
         extra_stop: list[str] = []
         system_message = None
         if is_nemotron:
-            console.info("Nemotron detected; applying compatibility tweaks.")
-            extra_stop = ["<|start_of_turn|>", "<|end_of_turn|>"]
-            system_message = (
-                "You are a helpful AI assistant with tool calling capabilities. "
-                "Use tools when needed. Do not emit tool-call markup as plain text. "
-                "When calling a tool, use the tool calling mechanism only."
-            )
+            # Note: Nemotron models in Ollama use a dedicated parser/renderer. We avoid
+            # applying Llama-style stop tokens here because they can cause empty outputs.
+            console.info("Nemotron detected; using Nemotron-compatible Modelfile settings.")
 
         modelfile_text = generate_modelfile(
             absolute_model_path=str(final_gguf.resolve()),

@@ -137,7 +137,7 @@ Common options:
 |---|---:|---:|---|
 | `--model-source` | ✅ Yes | - | Local path, HF repo id/URL, or `hf.co/<owner>/<repo>:<QUANT>` |
 | `--model-name` | ❌ No | Derived | Name to register in Ollama |
-| `--architecture` | ❌ No | `auto` | `llama3`, `mistral`, `phi3`, `gemma2`, `qwen`, or `auto` |
+| `--architecture` | ❌ No | `auto` | `nemotron`, `llama3`, `mistral`, `phi3`, `gemma2`, `qwen`, or `auto` |
 | `--context-length` | ❌ No | (auto) | Context window (`num_ctx`). If omitted, this tool will not set `num_ctx` in the Modelfile and Ollama/model defaults apply (Ollama may cap the maximum, e.g. 256k). |
 | `--temperature` | ❌ No | `0.7` | Default sampling temperature |
 | `--quantization-type` | ❌ No | - | Quant filter for HF downloads |

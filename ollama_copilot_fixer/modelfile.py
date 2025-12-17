@@ -7,6 +7,8 @@ from dataclasses import dataclass
 class ModelTemplate:
     template: str
     stop: list[str]
+    renderer: str | None = None
+    parser: str | None = None
 
 
 _SYSTEM_MESSAGE = (
@@ -22,6 +24,14 @@ _TOOLS_PREAMBLE = (
 
 
 _TEMPLATES: dict[str, ModelTemplate] = {
+    # Nemotron models in Ollama use a dedicated parser/renderer.
+    # Applying Llama/Mistral-style chat templates to these models can result in empty outputs.
+    "nemotron": ModelTemplate(
+        template="{{ .Prompt }}",
+        stop=[],
+        renderer="nemotron-3-nano",
+        parser="nemotron-3-nano",
+    ),
     "llama3": ModelTemplate(
         template=(
             "{{ if .Messages }}\n"
@@ -38,12 +48,15 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "<|start_header_id|>{{ .Role }}<|end_header_id|>\n\n"
             "{{ .Content }}<|eot_id|>\n"
             "{{- end }}\n"
+            "<|start_header_id|>assistant<|end_header_id|>\n\n"
+            "{{ .Response }}<|eot_id|>\n"
             "{{- else }}\n"
             "<|start_header_id|>system<|end_header_id|>\n\n"
             "{{ .System }}<|eot_id|>\n"
             "<|start_header_id|>user<|end_header_id|>\n\n"
             "{{ .Prompt }}<|eot_id|>\n"
-            "<|start_header_id|>assistant<|end_header_id|>\n"
+            "<|start_header_id|>assistant<|end_header_id|>\n\n"
+            "{{ .Response }}<|eot_id|>"
             "{{- end }}"
         ),
         stop=["<|start_header_id|>", "<|end_header_id|>", "<|eot_id|>"],
@@ -64,8 +77,10 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{- else if eq .Role \"assistant\" }}{{ .Content }}</s>\n"
             "{{- end }}\n"
             "{{- end }}\n"
+            "{{ .Response }}</s>\n"
             "{{- else }}[INST] {{ if .System }}{{ .System }}\n\n"
             "{{ end }}{{ .Prompt }} [/INST]\n"
+            "{{ .Response }}</s>\n"
             "{{- end }}"
         ),
         stop=["</s>", "[INST]", "[/INST]"],
@@ -86,11 +101,13 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{ .Content }}<|end|>\n"
             "{{- end }}\n"
             "<|assistant|>\n"
+            "{{ .Response }}<|end|>\n"
             "{{- else }}<|system|>\n"
             "{{ .System }}<|end|>\n"
             "<|user|>\n"
             "{{ .Prompt }}<|end|>\n"
             "<|assistant|>\n"
+            "{{ .Response }}<|end|>\n"
             "{{- end }}"
         ),
         stop=["<|end|>", "<|system|>", "<|user|>", "<|assistant|>"],
@@ -111,11 +128,13 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{ .Content }}<end_of_turn>\n"
             "{{- end }}\n"
             "<start_of_turn>model\n"
+            "{{ .Response }}<end_of_turn>\n"
             "{{- else }}<start_of_turn>system\n"
             "{{ .System }}<end_of_turn>\n"
             "<start_of_turn>user\n"
             "{{ .Prompt }}<end_of_turn>\n"
             "<start_of_turn>model\n"
+            "{{ .Response }}<end_of_turn>\n"
             "{{- end }}"
         ),
         stop=["<end_of_turn>", "<start_of_turn>"],
@@ -137,11 +156,13 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{ .Content }}<|im_end|>\n"
             "{{- end }}\n"
             "<|im_start|>assistant\n"
+            "{{ .Response }}<|im_end|>\n"
             "{{- else }}<|im_start|>system\n"
             "{{ .System }}<|im_end|>\n"
             "<|im_start|>user\n"
             "{{ .Prompt }}<|im_end|>\n"
             "<|im_start|>assistant\n"
+            "{{ .Response }}<|im_end|>\n"
             "{{- end }}"
         ),
         stop=["<|im_start|>", "<|im_end|>"],
@@ -180,8 +201,18 @@ def generate_modelfile(
         f"# Architecture: {architecture}",
         "",
         f"FROM {absolute_model_path}",
+        *(
+            [f"RENDERER {mt.renderer}"]
+            if mt.renderer
+            else []
+        ),
+        *(
+            [f"PARSER {mt.parser}"]
+            if mt.parser
+            else []
+        ),
         "",
-        "# Template with Tool support",
+        "# Template",
         f'TEMPLATE """{mt.template}"""',
         "",
         "# Stop sequences",
@@ -196,10 +227,16 @@ def generate_modelfile(
         f"PARAMETER temperature {temperature}",
         "PARAMETER num_predict -1",
         "",
-        "# System message",
-        f'SYSTEM """{system_message or _SYSTEM_MESSAGE}"""',
-        "",
     ]
+
+    # Nemotron parser/renderer handles chat/tool formatting; avoid forcing a system message
+    # that isn't referenced in the template.
+    if architecture != "nemotron":
+        out += [
+            "# System message",
+            f'SYSTEM """{system_message or _SYSTEM_MESSAGE}"""',
+            "",
+        ]
 
     if context_length is not None:
         if context_length <= 0:

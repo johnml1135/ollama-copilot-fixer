@@ -114,7 +114,9 @@ def detect_architecture(file_path: str) -> str:
         return "qwen"
 
     filename = Path(file_path).name.lower()
-    if re.search(r"llama.*3|nemotron", filename):
+    if "nemotron" in filename:
+        return "nemotron"
+    if re.search(r"llama.*3", filename):
         return "llama3"
     if re.search(r"mistral|mixtral", filename):
         return "mistral"
