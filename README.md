@@ -2,12 +2,12 @@
 
 **Fix and enable custom GGUF models (including sharded files) from HuggingFace/Unsloth for GitHub Copilot with full Tool support**
 
-GitHub Copilot's local model integration requires the "Tool" capability to function properly. This PowerShell script solves multiple common issues:
+GitHub Copilot's local model integration requires the **"Tool"** capability to function properly. This repo provides a **Python CLI** that:
 
-1. ✅ **Sharded GGUF files** - Automatically detects and merges split models
-2. ✅ **Missing Tool capability** - Applies proper templates for Copilot compatibility  
-3. ✅ **HuggingFace downloads** - Downloads models directly from HuggingFace repos
-4. ✅ **Local file support** - Works with files already on your system
+1. ✅ **Downloads GGUFs from Hugging Face**
+2. ✅ **Detects + merges sharded GGUFs** (via `llama-gguf-split`)
+3. ✅ **Generates an Ollama Modelfile** with tool-capable chat templates
+4. ✅ **Runs `ollama create`** so the model is usable by Copilot
 
 ---
 
@@ -22,7 +22,7 @@ Custom GGUF imports to Ollama only show "Inference" capability by default. GitHu
 ### Problem 3: Manual Downloads
 Downloading models from HuggingFace and configuring them manually is tedious and error-prone.
 
-**This script fixes all three issues automatically. ** 🚀
+**This script fixes all three issues automatically.** 🚀
 
 ---
 
@@ -41,62 +41,108 @@ Downloading models from HuggingFace and configuring them manually is tedious and
 
 ## 📋 Prerequisites
 
-- **Windows** with PowerShell 5.1+ (or PowerShell Core 7+)
-- **[Ollama](https://ollama.ai/download)** installed and running
-- **[llama.cpp](https://github.com/ggerganov/llama.cpp/releases)** (for merging sharded files - script can auto-download)
-- **[HuggingFace CLI](https://huggingface.co/docs/huggingface_hub/main/en/guides/cli)** (optional, for HF downloads)
+- **Python 3.10+**
+- **[Ollama](https://ollama.ai/download)** installed and running (`ollama serve`)
+- **[llama.cpp](https://github.com/ggml-org/llama.cpp/releases)** (only needed for merging sharded GGUFs)
+- **Hugging Face CLI** (only needed for HF downloads): `python -m pip install -U huggingface_hub`
 - **VS Code** with GitHub Copilot extension
 
 ---
 
 ## 🚀 Quick Start
 
-### Install HuggingFace CLI (Optional but Recommended)
+### 1) (Optional) Install Hugging Face CLI
 
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://hf.co/cli/install.ps1 | iex"
+```bash
+python -m pip install -U huggingface_hub
+```
+
+If the repo is gated/private, authenticate first:
+
+```bash
+hf auth login
+```
+
+### 2) Run the tool
+
+The CLI is runnable directly from the repo:
+
+```bash
+python -m ollama_copilot_fixer --help
 ```
 
 ### Usage Examples
 
-#### 1. Download from HuggingFace
+#### 1. Download from Hugging Face
 
-```powershell
-.\Setup-OllamaToolModel.ps1 -ModelSource "unsloth/Llama-3.2-3B-Instruct-GGUF" -ModelName "llama3-copilot"
+```bash
+python -m ollama_copilot_fixer \
+	--model-source "unsloth/Llama-3.2-3B-Instruct-GGUF" \
+	--model-name "llama3-copilot"
 ```
 
-#### 2. Use a Local GGUF File
+#### 1b. Download using Ollama-style HF syntax (recommended)
 
-```powershell
-.\Setup-OllamaToolModel.ps1 -ModelSource "C:\Models\nemotron-nano-Q4_K_M.gguf"
+```bash
+python -m ollama_copilot_fixer \
+	--model-source "hf.co/unsloth/Nemotron-3-Nano-30B-A3B-GGUF:Q4_0" \
+	--model-name "nemotron-copilot"
 ```
 
-#### 3. Merge Sharded Files and Configure
+Notes:
+- `hf.co/<owner>/<repo>` is treated as the Hugging Face repo id.
+- The `:<QUANT>` suffix is treated like `--quantization-type` (e.g. `Q4_0`, `Q4_K_M`, `IQ2_XXS`).
 
-```powershell
-.\Setup-OllamaToolModel.ps1 -ModelSource "C:\Models\llama-405b-00001-of-00008.gguf" -ModelName "llama-405b"
+#### 2. Use a local GGUF file
+
+```bash
+python -m ollama_copilot_fixer --model-source "C:\\Models\\nemotron-nano-Q4_K_M.gguf"
 ```
 
-#### 4. Download Specific Quantization from HuggingFace
+#### 3. Merge sharded files and configure
 
-```powershell
-.\Setup-OllamaToolModel.ps1 -ModelSource "bartowski/Llama-3.3-70B-Instruct-GGUF" -QuantizationType "Q4_K_M"
+Provide the **first shard** and a path to `llama-gguf-split`:
+
+```bash
+python -m ollama_copilot_fixer \
+	--model-source "C:\\Models\\llama-405b-00001-of-00008.gguf" \
+	--llama-cpp-path "C:\\llama.cpp\\bin" \
+	--model-name "llama-405b"
+```
+
+#### 4. Download a specific quant
+
+```bash
+python -m ollama_copilot_fixer \
+	--model-source "bartowski/Llama-3.3-70B-Instruct-GGUF" \
+	--quantization-type "Q4_K_M"
+```
+
+#### 5. Works with Unsloth Dynamic 2.0 quants
+
+```bash
+python -m ollama_copilot_fixer --model-source "hf.co/unsloth/<MODEL-REPO>:IQ2_XXS"
 ```
 
 ---
 
-## 📖 Parameters
+## 📖 CLI Options
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `ModelSource` | ✅ Yes | - | Local path, HF repo ID, or HF URL |
-| `ModelName` | ❌ No | Auto-generated | Custom name for the model in Ollama |
-| `Architecture` | ❌ No | `auto` | Force architecture:  `llama3`, `mistral`, `phi3`, `gemma2` |
-| `ContextLength` | ❌ No | `8192` | Maximum context window size |
-| `Temperature` | ❌ No | `0.7` | Default sampling temperature |
-| `QuantizationType` | ❌ No | First found | Specific quant (e.g., `Q4_K_M`, `Q5_K_M`) |
-| `LlamaCppPath` | ❌ No | Auto-detect | Path to llama.cpp installation |
-| `KeepDownloads` | ❌ No | `false` | Keep downloaded files after import |
+Run `python -m ollama_copilot_fixer --help` for the full list.
+
+Common options:
+
+| Option | Required | Default | Description |
+|---|---:|---:|---|
+| `--model-source` | ✅ Yes | - | Local path, HF repo id/URL, or `hf.co/<owner>/<repo>:<QUANT>` |
+| `--model-name` | ❌ No | Derived | Name to register in Ollama |
+| `--architecture` | ❌ No | `auto` | `llama3`, `mistral`, `phi3`, `gemma2`, `qwen`, or `auto` |
+| `--context-length` | ❌ No | `8192` | Context window |
+| `--temperature` | ❌ No | `0.7` | Default sampling temperature |
+| `--quantization-type` | ❌ No | - | Quant filter for HF downloads |
+| `--llama-cpp-path` | ❌ No | - | Path to llama.cpp folder or `llama-gguf-split.exe` |
+| `--keep-downloads` | ❌ No | off | Keep temp working directory |
+| `--skip-test` | ❌ No | off | Skip `ollama run` smoke test |
 
 ---
 
@@ -112,9 +158,9 @@ powershell -ExecutionPolicy ByPass -c "irm https://hf.co/cli/install.ps1 | iex"
 
 ## 🔧 How It Works
 
-### For Local Files: 
+### For Local Files
 1. Detects if file is part of a sharded set
-2. Merges shards using llama.cpp's `gguf-split` tool
+2. Merges shards using llama.cpp's `llama-gguf-split` tool
 3. Applies architecture-specific tool template
 4. Creates model in Ollama with Tool capability
 
@@ -123,6 +169,34 @@ powershell -ExecutionPolicy ByPass -c "irm https://hf.co/cli/install.ps1 | iex"
 2. Auto-selects specified quantization or first GGUF found
 3. Handles sharded downloads automatically
 4. Proceeds with merge and configuration
+
+---
+
+## ✅ Recommended Fix for Nemotron Tool Calling: NVIDIA NIM
+
+Some Nemotron GGUF builds (notably `Nemotron-3-Nano`) can emit tool calls as **plain text** (for example, XML-ish blocks like `<function=read_file>...`) when run via Ollama. GitHub Copilot expects **OpenAI-style structured tool calls** (`tool_calls`), so it may render that markup verbatim instead of executing tools.
+
+NVIDIA NIM provides an OpenAI-compatible `/v1` API and supports tool calling for **Nemotron 3 Nano**.
+
+### If you are using an LLM-specific NIM container (recommended)
+
+Tool calling is enabled automatically for supported models (Nemotron 3 Nano is listed as supported), and NVIDIA’s docs explicitly recommend **not** setting tool-calling environment variables externally for LLM-specific NIM containers.
+
+Configure Copilot to point at the NIM endpoint:
+- Base URL: `http://localhost:8000/v1`
+
+### If you are using a generic LLM NIM deployment
+
+Enable tool calling and select a post-processor:
+
+```bash
+NIM_ENABLE_AUTO_TOOL_CHOICE=1
+NIM_TOOL_CALL_PARSER=pythonic
+```
+
+If the chat response contains an empty `tool_calls` field but the function call appears in `content`, the parser/template combination is mismatched. Per NVIDIA’s guidance, fix this by switching parsers (options include `mistral`, `llama3_json`, `granite`, `hermes`, `jamba`) and/or overriding the chat template via `NIM_CHAT_TEMPLATE`.
+
+---
 
 ---
 
@@ -169,41 +243,48 @@ Your model is ready for use with GitHub Copilot!  🎉
 
 ## 🤔 Troubleshooting
 
-### Sharded File Merging Fails
+### Sharded file merging fails
 
 **Error:** "gguf-split not found" or merge errors
 
 **Solutions:**
-1. Install llama.cpp from [releases](https://github.com/ggerganov/llama.cpp/releases)
-2. Specify path manually: `-LlamaCppPath "C:\path\to\llama.cpp"`
+1. Install llama.cpp from [releases](https://github.com/ggml-org/llama.cpp/releases)
+2. Specify the path to `llama-gguf-split` manually: `--llama-cpp-path "C:\\path\\to\\llama.cpp\\bin"`
 3. Ensure all shard files are in the same directory
 4. Verify files downloaded completely (check file sizes)
 
-### HuggingFace Download Issues
+### Hugging Face download issues
 
-**Error:** "hf command not found"
+**Error:** `hf` not found
 
-**Solution:**
-```powershell
-# Install HF CLI
-powershell -ExecutionPolicy ByPass -c "irm https://hf.co/cli/install.ps1 | iex"
-
-# Or use Python
-pip install -U huggingface_hub
+```bash
+python -m pip install -U huggingface_hub
 ```
 
-### Model Not Appearing in Copilot
+**Error:** no GGUFs found after download
 
-1.  Restart VS Code completely
-2. Verify:  `ollama list` shows the model with "tool" capability
-3. Check: `ollama show MODEL_NAME --modelfile`
-4. Ensure Ollama is running:  `ollama serve`
+- The repo may be gated: run `hf auth login`.
+- Your quant filter may be too strict: omit `--quantization-type` and try again.
+
+### Model not appearing in Copilot
+
+1. Restart VS Code completely
+2. Verify `ollama list` shows the model
+3. Check `ollama show MODEL_NAME --modelfile`
+4. Ensure Ollama is running: `ollama serve`
+
+### Copilot shows `<function=...>` or other tool markup
+
+This usually means the model is outputting tool calls as plain text, not as structured `tool_calls`.
+
+- For Nemotron models, prefer running them via NVIDIA NIM (see the section above).
+- For Ollama + GGUF imports, see “Future Improvements” below for the proxy approach.
 
 ### Out of Disk Space
 
 For large models (70B+), ensure you have:
 - 2x model size for sharded files during merge
-- Use `-KeepDownloads $false` to auto-cleanup
+- Use the default cleanup behavior (omit `--keep-downloads`) to remove temporary downloads/merges
 
 ---
 
@@ -239,6 +320,30 @@ The `gguf-split` utility from llama.cpp:
 - [HuggingFace CLI Documentation](https://huggingface.co/docs/huggingface_hub/main/en/guides/cli)
 - [GitHub Copilot Local Models](https://code.visualstudio.com/docs/copilot/copilot-customization)
 - [Ollama Multi-file GGUF Issue](https://github.com/ollama/ollama/issues/5245)
+- [NVIDIA NIM Function (Tool) Calling](https://docs.nvidia.com/nim/large-language-models/1.15.0/function-calling.html)
+
+---
+
+## 🔮 Future Improvements: ToolBridge / OpenAI↔Ollama Proxy
+
+When using Ollama with certain GGUF imports, the model may not consistently produce structured tool calls even with a good Modelfile template. In those cases, a lightweight proxy can translate “tool call as text” into OpenAI-compatible `tool_calls` so GitHub Copilot can execute tools instead of displaying markup.
+
+### Why it would be needed
+
+- Ollama can expose an OpenAI-like API, but tool calling still depends on the model emitting a parseable tool-call dialect.
+- Some models (including certain Nemotron GGUF builds) emit tool calls in a non-standard textual format.
+
+### How it could be implemented
+
+- Run a local proxy (for example, ToolBridge) that accepts OpenAI `/v1` requests from Copilot.
+- Proxy forwards prompts to Ollama, then:
+	- Detects tool-call text patterns in the assistant content.
+	- Converts them into structured `tool_calls` in the OpenAI response.
+	- Optionally strips special tokens / turn markers.
+- Update this repo to add:
+	- A probe step to detect whether a model emits structured tool calls.
+	- Optional commands to install/run the proxy as a background service (Windows Scheduled Task, Linux systemd).
+	- Minimal config to point Copilot at the proxy endpoint when needed.
 
 ---
 

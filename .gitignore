@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Local tooling
+.DS_Store
+Thumbs.db
+
+# Ollama Copilot Fixer working dirs
+ollama_copilot_fixer_*/
