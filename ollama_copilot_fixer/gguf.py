@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import hashlib
 from pathlib import Path
 
 _SHARD_PATTERNS = [
@@ -46,6 +47,25 @@ def shard_files(first_shard_path: str) -> list[Path]:
         if re.search(r"-\d{5}-of-\d{5}|part-?\d+", p.name, flags=re.IGNORECASE)
     ]
     return sorted(shards, key=lambda p: p.name)
+
+
+def shards_fingerprint(shards: list[Path]) -> str:
+    """Stable-ish fingerprint for a shard set, based on names + sizes + mtimes.
+
+    Avoid hashing full contents (too expensive for large models).
+    """
+    h = hashlib.sha256()
+    for p in shards:
+        try:
+            st = p.stat()
+            h.update(p.name.encode("utf-8", errors="ignore"))
+            h.update(str(st.st_size).encode("ascii"))
+            h.update(str(int(st.st_mtime)).encode("ascii"))
+            h.update(b"\n")
+        except Exception:
+            h.update(p.name.encode("utf-8", errors="ignore"))
+            h.update(b"\n")
+    return h.hexdigest()[:16]
 
 
 def merge_sharded_model(first_shard_path: str, output_path: str, llama_split_path: str) -> str:

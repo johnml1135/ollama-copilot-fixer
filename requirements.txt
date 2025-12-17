@@ -1,0 +1,2 @@
+huggingface_hub>=0.23.0
+hf_xet>=1.2.0

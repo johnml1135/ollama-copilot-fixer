@@ -44,7 +44,8 @@ Downloading models from HuggingFace and configuring them manually is tedious and
 - **Python 3.10+**
 - **[Ollama](https://ollama.ai/download)** installed and running (`ollama serve`)
 - **[llama.cpp](https://github.com/ggml-org/llama.cpp/releases)** (only needed for merging sharded GGUFs)
-- **Hugging Face CLI** (only needed for HF downloads): `python -m pip install -U huggingface_hub`
+- **Python deps**: `python -m pip install -r requirements.txt`
+- **Hugging Face CLI** (optional fallback for HF downloads): `python -m pip install -U huggingface_hub`
 - **VS Code** with GitHub Copilot extension
 
 ---
@@ -54,7 +55,7 @@ Downloading models from HuggingFace and configuring them manually is tedious and
 ### 1) (Optional) Install Hugging Face CLI
 
 ```bash
-python -m pip install -U huggingface_hub
+python -m pip install -r requirements.txt
 ```
 
 If the repo is gated/private, authenticate first:
@@ -137,12 +138,47 @@ Common options:
 | `--model-source` | ✅ Yes | - | Local path, HF repo id/URL, or `hf.co/<owner>/<repo>:<QUANT>` |
 | `--model-name` | ❌ No | Derived | Name to register in Ollama |
 | `--architecture` | ❌ No | `auto` | `llama3`, `mistral`, `phi3`, `gemma2`, `qwen`, or `auto` |
-| `--context-length` | ❌ No | `8192` | Context window |
+| `--context-length` | ❌ No | (auto) | Context window (`num_ctx`). If omitted, this tool will not set `num_ctx` in the Modelfile and Ollama/model defaults apply (Ollama may cap the maximum, e.g. 256k). |
 | `--temperature` | ❌ No | `0.7` | Default sampling temperature |
 | `--quantization-type` | ❌ No | - | Quant filter for HF downloads |
 | `--llama-cpp-path` | ❌ No | - | Path to llama.cpp folder or `llama-gguf-split.exe` |
 | `--keep-downloads` | ❌ No | off | Keep temp working directory |
 | `--skip-test` | ❌ No | off | Skip `ollama run` smoke test |
+
+Tip: if you want to explicitly request a large context window (subject to Ollama limits), pass it directly:
+
+```bash
+python -m ollama_copilot_fixer \
+	--model-source "hf.co/unsloth/Nemotron-3-Nano-30B-A3B-GGUF:Q4_0" \
+	--model-name "nemotron-copilot" \
+	--context-length 262144
+```
+
+### Caching + config
+
+This tool now uses an app-managed cache directory (downloads, HF cache, merged GGUFs) to reduce repeated downloads and merges.
+
+- Default config path:
+	- Windows: `%APPDATA%\ollama-copilot-fixer\config.json`
+	- Linux: `$XDG_CONFIG_HOME/ollama-copilot-fixer/config.json` (or `~/.config/...`)
+- Default cache root:
+	- Windows: `%LOCALAPPDATA%\ollama-copilot-fixer\cache`
+	- Linux: `$XDG_CACHE_HOME/ollama-copilot-fixer` (or `~/.cache/...`)
+
+Override config and cache locations:
+
+```bash
+python -m ollama_copilot_fixer --config "C:\path\to\config.json" --cache-root "D:\LLMCache"
+```
+
+An example config is provided in [config.example.json](config.example.json).
+
+Cache commands:
+
+```bash
+python -m ollama_copilot_fixer cache info
+python -m ollama_copilot_fixer cache clear
+```
 
 ---
 

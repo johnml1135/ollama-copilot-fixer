@@ -15,6 +15,12 @@ _SYSTEM_MESSAGE = (
 )
 
 
+_TOOLS_PREAMBLE = (
+    "You have access to the following tools. Use them when helpful. "
+    "When you call a tool, call it using the tool calling mechanism (not as plain text in the chat content).\n"
+)
+
+
 _TEMPLATES: dict[str, ModelTemplate] = {
     "llama3": ModelTemplate(
         template=(
@@ -24,7 +30,8 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{ .System }}\n"
             "{{- end }}\n"
             "{{- if .Tools }}\n\n"
-            "You are a helpful assistant with tool calling capabilities. When you receive a tool call response, use the output to format an answer to the original user question.\n"
+            f"{_TOOLS_PREAMBLE}"
+            "{{ .Tools }}\n"
             "{{- end }}<|eot_id|>\n"
             "{{- end }}\n"
             "{{- range .Messages }}\n"
@@ -48,7 +55,8 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{- if .System }}{{ .System }}\n"
             "{{- end }}\n"
             "{{- if .Tools }}\n\n"
-            "You are a helpful assistant with tool calling capabilities. When you receive a tool call response, use the output to format an answer to the original user question.\n"
+            f"{_TOOLS_PREAMBLE}"
+            "{{ .Tools }}\n"
             "{{- end }}[/INST]\n"
             "{{- end }}\n"
             "{{- range .Messages }}\n"
@@ -69,7 +77,8 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{- if .System }}{{ .System }}\n"
             "{{- end }}\n"
             "{{- if .Tools }}\n\n"
-            "You are a helpful assistant with tool calling capabilities. When you receive a tool call response, use the output to format an answer to the original user question.\n"
+            f"{_TOOLS_PREAMBLE}"
+            "{{ .Tools }}\n"
             "{{- end }}<|end|>\n"
             "{{- end }}\n"
             "{{- range .Messages }}\n"
@@ -93,7 +102,8 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{- if .System }}{{ .System }}\n"
             "{{- end }}\n"
             "{{- if .Tools }}\n\n"
-            "You are a helpful assistant with tool calling capabilities. When you receive a tool call response, use the output to format an answer to the original user question.\n"
+            f"{_TOOLS_PREAMBLE}"
+            "{{ .Tools }}\n"
             "{{- end }}<end_of_turn>\n"
             "{{- end }}\n"
             "{{- range .Messages }}\n"
@@ -118,7 +128,8 @@ _TEMPLATES: dict[str, ModelTemplate] = {
             "{{ .System }}\n"
             "{{- end }}\n"
             "{{- if .Tools }}\n\n"
-            "You are a helpful assistant with tool calling capabilities. When you receive a tool call response, use the output to format an answer to the original user question.\n"
+            f"{_TOOLS_PREAMBLE}"
+            "{{ .Tools }}\n"
             "{{- end }}<|im_end|>\n"
             "{{- end }}\n"
             "{{- range .Messages }}\n"
@@ -146,8 +157,10 @@ def generate_modelfile(
     *,
     absolute_model_path: str,
     architecture: str,
-    context_length: int,
+    context_length: int | None,
     temperature: float,
+    extra_stop: list[str] | None = None,
+    system_message: str | None = None,
 ) -> str:
     if architecture not in _TEMPLATES:
         raise ValueError(
@@ -155,6 +168,11 @@ def generate_modelfile(
         )
 
     mt = _TEMPLATES[architecture]
+    stop = list(mt.stop)
+    if extra_stop:
+        for s in extra_stop:
+            if s not in stop:
+                stop.append(s)
 
     # Ollama Modelfile syntax
     out = [
@@ -169,19 +187,23 @@ def generate_modelfile(
         "# Stop sequences",
     ]
 
-    for seq in mt.stop:
+    for seq in stop:
         out.append(f'PARAMETER stop "{seq}"')
 
     out += [
         "",
         "# Model parameters",
         f"PARAMETER temperature {temperature}",
-        f"PARAMETER num_ctx {context_length}",
         "PARAMETER num_predict -1",
         "",
         "# System message",
-        f'SYSTEM """{_SYSTEM_MESSAGE}"""',
+        f'SYSTEM """{system_message or _SYSTEM_MESSAGE}"""',
         "",
     ]
+
+    if context_length is not None:
+        if context_length <= 0:
+            raise ValueError("context_length must be a positive integer")
+        out.insert(out.index("PARAMETER num_predict -1"), f"PARAMETER num_ctx {context_length}")
 
     return "\n".join(out)
