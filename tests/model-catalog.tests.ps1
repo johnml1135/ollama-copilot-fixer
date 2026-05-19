@@ -44,15 +44,45 @@ function Assert-ContainsValue {
     }
 }
 
-foreach ($key in @('qwen36-27b', 'qwen36-27b-quality-max', 'qwen36-27b-q5', 'qwen36-27b-max', 'qwen36-27b-mtp', 'qwen36-27b-mtp-quality', 'qwen36-27b-mtp-max')) {
-    Assert-True $global:LlamaModelCatalog.Contains($key) "catalog contains $key"
+$expectedOrder = @(
+    'qwen36-27b-mtp-q5',
+    'qwen36-27b-mtp-quality-max',
+    'qwen36-27b-q5',
+    'qwen36-27b-quality-max',
+    'gemma4-26b-a4b',
+    'gemma4-31b'
+)
+
+$actualOrder = @($global:LlamaModelCatalog.Keys)
+Assert-Equal $actualOrder.Count $expectedOrder.Count 'catalog profile count'
+for ($index = 0; $index -lt $expectedOrder.Count; $index++) {
+    Assert-Equal $actualOrder[$index] $expectedOrder[$index] "catalog order $index"
 }
 
-$standard = $global:LlamaModelCatalog['qwen36-27b']
-Assert-Equal $standard.Context 200000 'standard Qwen context'
-Assert-Equal $standard.CacheTypeK 'q8_0' 'standard Qwen K cache type'
-Assert-Equal $standard.CacheTypeV 'q8_0' 'standard Qwen V cache type'
-Assert-Equal $standard.NoMmproj $true 'standard Qwen disables mmproj'
+$qwenKeys = @($global:LlamaModelCatalog.Keys | Where-Object { $_ -like 'qwen36-*' })
+Assert-Equal $qwenKeys.Count 4 'active Qwen profile count'
+
+$mtpQ5 = $global:LlamaModelCatalog['qwen36-27b-mtp-q5']
+Assert-Equal $mtpQ5.HFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'MTP Q5 repo'
+Assert-Equal $mtpQ5.HFFile 'Qwen3.6-27B-Q5_K_M.gguf' 'MTP Q5 file'
+Assert-Equal $mtpQ5.Quant 'Q5_K_M + MTP' 'MTP Q5 quant'
+Assert-Equal $mtpQ5.Context 160000 'MTP Q5 context'
+Assert-Equal $mtpQ5.CacheTypeK 'q4_1' 'MTP Q5 K cache type'
+Assert-Equal $mtpQ5.CacheTypeV 'q4_1' 'MTP Q5 V cache type'
+Assert-Equal $mtpQ5.NoMmproj $true 'MTP Q5 disables mmproj'
+Assert-ContainsValue $mtpQ5.ExtraArgs 'draft-mtp' 'MTP Q5 uses draft-mtp'
+Assert-ContainsValue $mtpQ5.ExtraArgs '2' 'MTP Q5 uses conservative draft limit'
+
+$mtpQualityMax = $global:LlamaModelCatalog['qwen36-27b-mtp-quality-max']
+Assert-Equal $mtpQualityMax.HFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'MTP quality max repo'
+Assert-Equal $mtpQualityMax.HFFile 'Qwen3.6-27B-UD-Q4_K_XL.gguf' 'MTP quality max file'
+Assert-Equal $mtpQualityMax.Quant 'UD-Q4_K_XL + MTP' 'MTP quality max quant'
+Assert-Equal $mtpQualityMax.Context 245760 'MTP quality max context'
+Assert-Equal $mtpQualityMax.CacheTypeK 'q4_1' 'MTP quality max K cache type'
+Assert-Equal $mtpQualityMax.CacheTypeV 'q4_1' 'MTP quality max V cache type'
+Assert-Equal $mtpQualityMax.NoMmproj $true 'MTP quality max disables mmproj'
+Assert-ContainsValue $mtpQualityMax.ExtraArgs 'draft-mtp' 'MTP quality max uses draft-mtp'
+Assert-ContainsValue $mtpQualityMax.ExtraArgs '2' 'MTP quality max uses conservative draft limit'
 
 $qualityMax = $global:LlamaModelCatalog['qwen36-27b-quality-max']
 Assert-Equal $qualityMax.HFRepo 'unsloth/Qwen3.6-27B-GGUF' 'quality max Qwen repo'
@@ -65,47 +95,11 @@ Assert-Equal $qualityMax.NoMmproj $true 'quality max Qwen disables mmproj'
 
 $q5 = $global:LlamaModelCatalog['qwen36-27b-q5']
 Assert-Equal $q5.HFRepo 'unsloth/Qwen3.6-27B-GGUF' 'Q5 Qwen repo'
-Assert-Equal $q5.HFFile 'Qwen3.6-27B-Q5_K_S.gguf' 'Q5 Qwen file'
-Assert-Equal $q5.Quant 'Q5_K_S' 'Q5 Qwen quant'
+Assert-Equal $q5.HFFile 'Qwen3.6-27B-Q5_K_M.gguf' 'Q5 Qwen file'
+Assert-Equal $q5.Quant 'Q5_K_M' 'Q5 Qwen quant'
 Assert-Equal $q5.Context 200000 'Q5 Qwen context'
 Assert-Equal $q5.CacheTypeK 'q4_1' 'Q5 Qwen K cache type'
 Assert-Equal $q5.CacheTypeV 'q4_1' 'Q5 Qwen V cache type'
 Assert-Equal $q5.NoMmproj $true 'Q5 Qwen disables mmproj'
-
-$standardMax = $global:LlamaModelCatalog['qwen36-27b-max']
-Assert-Equal $standardMax.Context 262144 'max Qwen context'
-Assert-Equal $standardMax.CacheTypeK 'q4_1' 'max Qwen K cache type'
-Assert-Equal $standardMax.CacheTypeV 'q4_1' 'max Qwen V cache type'
-Assert-Equal $standardMax.NoMmproj $true 'max Qwen disables mmproj'
-
-$mtp = $global:LlamaModelCatalog['qwen36-27b-mtp']
-Assert-Equal $mtp.HFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'MTP repo'
-Assert-Equal $mtp.HFFile 'Qwen3.6-27B-IQ4_XS.gguf' 'MTP file'
-Assert-Equal $mtp.Context 200000 'MTP standard context'
-Assert-Equal $mtp.CacheTypeK 'q8_0' 'MTP standard K cache type'
-Assert-Equal $mtp.CacheTypeV 'q8_0' 'MTP standard V cache type'
-Assert-Equal $mtp.NoMmproj $true 'MTP standard disables mmproj'
-Assert-ContainsValue $mtp.ExtraArgs '--spec-type' 'MTP has spec-type arg'
-Assert-ContainsValue $mtp.ExtraArgs 'draft-mtp' 'MTP uses draft-mtp'
-Assert-ContainsValue $mtp.ExtraArgs '--spec-draft-n-max' 'MTP has draft limit arg'
-Assert-ContainsValue $mtp.ExtraArgs '2' 'MTP uses conservative draft limit'
-
-$mtpQuality = $global:LlamaModelCatalog['qwen36-27b-mtp-quality']
-Assert-Equal $mtpQuality.HFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'MTP quality repo'
-Assert-Equal $mtpQuality.HFFile 'Qwen3.6-27B-UD-Q4_K_XL.gguf' 'MTP quality file'
-Assert-Equal $mtpQuality.Quant 'UD-Q4_K_XL + MTP' 'MTP quality quant'
-Assert-Equal $mtpQuality.Context 200000 'MTP quality context'
-Assert-Equal $mtpQuality.CacheTypeK 'q4_1' 'MTP quality K cache type'
-Assert-Equal $mtpQuality.CacheTypeV 'q4_1' 'MTP quality V cache type'
-Assert-Equal $mtpQuality.NoMmproj $true 'MTP quality disables mmproj'
-Assert-ContainsValue $mtpQuality.ExtraArgs 'draft-mtp' 'MTP quality uses draft-mtp'
-Assert-ContainsValue $mtpQuality.ExtraArgs '2' 'MTP quality uses conservative draft limit'
-
-$mtpMax = $global:LlamaModelCatalog['qwen36-27b-mtp-max']
-Assert-Equal $mtpMax.Context 262144 'MTP max context'
-Assert-Equal $mtpMax.CacheTypeK 'q4_1' 'MTP max K cache type'
-Assert-Equal $mtpMax.CacheTypeV 'q4_1' 'MTP max V cache type'
-Assert-Equal $mtpMax.NoMmproj $true 'MTP max disables mmproj'
-Assert-ContainsValue $mtpMax.ExtraArgs 'draft-mtp' 'MTP max uses draft-mtp'
 
 Write-Host 'model-catalog tests passed' -ForegroundColor Green

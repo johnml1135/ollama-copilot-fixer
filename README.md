@@ -188,54 +188,64 @@ Headline numbers that drive the defaults:
 
 ## Curated Qwen3.6 27B profiles (24 GB)
 
-Defined in [scripts/models.ps1](scripts/models.ps1). The actively tuned Qwen
-profiles now target **Qwen3.6 27B only**. The safe 200K profiles keep `q8_0` KV
-for the most conservative tool-call reliability; the max-context and
-higher-weight profiles use `q4_1` KV because `q8_0` failed above the 200K range
-on this RTX 3090, while `q4_1` held the native 262,144-token window with all
-layers on GPU.
+Defined in [scripts/models.ps1](scripts/models.ps1). The active Qwen menu is
+intentionally capped at **four Qwen3.6 27B profiles**: MTP/non-MTP crossed with
+150K-class and 256K-class context targets. They are the first four menu entries,
+followed by the Gemma profiles.
 
-For better weights, the catalog prefers Unsloth's Dynamic `UD-Q4_K_XL` over
-plain `Q4_K_M`: Qwen3.6's own Unsloth examples use `UD-Q4_K_XL`, and the
-Dynamic 2.0 docs position those builds as layer-aware quants designed to stay
-closer to full precision. A non-MTP `Q5_K_S` profile is also included for runs
-where quality matters more than native-max context.
+The short answer on quality tradeoffs:
+
+- **MTP does not intentionally degrade output quality.** Speculative decoding
+  papers describe target-model verification schemes that preserve the target
+  distribution, and Unsloth's Qwen3.6 MTP docs say MTP gives 1.4-2.2x faster
+  generation with no accuracy change. It does cost memory: Unsloth says to plan
+  for about 1 GB extra RAM/VRAM headroom.
+- **`q4_1` KV cache is a quality tradeoff, but a small one compared with
+  dropping the base weights.** Hugging Face's KV-cache quantization blog reports
+  int4 cache performing almost the same as fp16 on perplexity and comparable on
+  LongBench, while KIVI reports almost the same quality even with 2-bit KV using
+  an asymmetric scheme. ExLlamaV2's Q4 cache evaluation likewise reports very
+  little loss versus FP16. Qwen-specific llama.cpp discussion cautions that
+  `q4_0` can produce weird Qwen results, so this catalog avoids `q4_0` and uses
+  `q4_1`, which stores a scale plus minimum per block.
+- **Use smaller KV to buy better weights.** Published/blog data says int4 KV is
+  usually a minor degradation; llama.cpp's k-quant data shows base-weight
+  perplexity improves smoothly as model quant size increases; Unsloth Dynamic
+  2.0 explicitly optimizes layer selection against KL divergence. On this 24 GB
+  card, the best practical tradeoff is therefore `q4_1` KV plus `UD-Q4_K_XL` or
+  Q5 weights, not `q8_0` KV plus `IQ4_XS` weights.
 
 All Qwen 27B profiles pass `--no-mmproj`. The Unsloth GGUF repos include a
 vision projector, but Copilot/Cline/OpenCode coding chat does not need it and it
 costs VRAM during load.
 
-| Key | Model | Quant | KV | Context (24 GB) | Speculative | Notes |
-| --- | ----- | ----- | -- | --------------- | ----------- | ----- |
-| `qwen36-27b` | Qwen3.6 27B | `IQ4_XS` | `q8_0` | **200 000** | none | Safest non-MTP agent profile. |
-| `qwen36-27b-quality-max` | Qwen3.6 27B | `UD-Q4_K_XL` | `q4_1` | **262 144** | none | Higher-quality Dynamic Q4 weights at native max context. |
-| `qwen36-27b-q5` | Qwen3.6 27B | `Q5_K_S` | `q4_1` | **200 000** | none | Highest-weight curated non-MTP profile; less context headroom. |
-| `qwen36-27b-max` | Qwen3.6 27B | `IQ4_XS` | `q4_1` | **262 144** | none | Native max context; use when context matters more than conservative KV. |
-| `qwen36-27b-mtp` | Qwen3.6 27B MTP | `IQ4_XS + MTP` | `q8_0` | **200 000** | `draft-mtp`, draft max 2 | Fast MTP profile with q8 KV; tight but verified. |
-| `qwen36-27b-mtp-quality` | Qwen3.6 27B MTP | `UD-Q4_K_XL + MTP` | `q4_1` | **200 000** | `draft-mtp`, draft max 2 | Better MTP weights; native-max context stays on the lighter MTP profile. |
-| `qwen36-27b-mtp-max` | Qwen3.6 27B MTP | `IQ4_XS + MTP` | `q4_1` | **262 144** | `draft-mtp`, draft max 2 | Fast native-max profile; currently the best fit for long local agent sessions. |
+### Qwen configuration matrix
 
-The older 35B/Gemma catalog entries remain available in `scripts/models.ps1`,
-but they are not the tuning target for this setup.
+| Slot | Key | MTP | Weight quant | GGUF size | KV | Context | Speculative | Live fit on RTX 3090 | Reserve | Why this one |
+| ---- | --- | --- | ------------ | --------- | -- | ------- | ----------- | -------------------- | ------- | ------------ |
+| MTP, max quality, 150K-class | `qwen36-27b-mtp-q5` | yes | `Q5_K_M` | 18.47 GiB | `q4_1` | 160,000 | `draft-mtp`, draft max 2 | 66/66 GPU layers; 22,182 MiB used of 22,854 MiB free | about 672 MiB | Highest MTP weight quant that live-probed above 150K. Tight, but it answers the quality-first slot. |
+| MTP, max quality, 256K-class | `qwen36-27b-mtp-quality-max` | yes | `UD-Q4_K_XL` | 16.68 GiB | `q4_1` | 245,760 | `draft-mtp`, draft max 2 | 66/66 GPU layers; 22,424 MiB used of 22,854 MiB free | about 430 MiB | Best MTP weight quant that still stays within about 20K of native max. |
+| Non-MTP, max quality, 150K-class | `qwen36-27b-q5` | no | `Q5_K_M` | 18.17 GiB | `q4_1` | 200,192 allocated | none | 65/65 GPU layers; 22,476 MiB used of 23,154 MiB free | about 678 MiB | Highest non-MTP weight quant live-probed above 150K. Tight, but comparable to the MTP Q5 slot. |
+| Non-MTP, max quality, 256K-class | `qwen36-27b-quality-max` | no | `UD-Q4_K_XL` | 16.40 GiB | `q4_1` | 262,144 | none | 65/65 GPU layers; 22,210 MiB used of 23,154 MiB free | about 944 MiB | Native-max context with Unsloth's recommended Dynamic Q4 weights. |
 
 Exact Hugging Face file sizes checked for the 27B candidates:
 
 | Quant | Non-MTP GGUF | MTP GGUF | Delta vs `IQ4_XS` | Catalog decision |
 | ----- | ------------ | -------- | ----------------- | ---------------- |
-| `IQ4_XS` | 14.38 GiB | 14.63 GiB | baseline | Safe/default and native-max long-context profiles. |
-| `Q4_K_M` | 15.66 GiB | 15.93 GiB | +1.28 GiB / +1.30 GiB | Likely fits, but skipped because `UD-Q4_K_XL` is the better Q4-quality target. |
-| `UD-Q4_K_XL` | 16.40 GiB | 16.68 GiB | +2.02 GiB / +2.05 GiB | Curated Dynamic Q4 quality profile for both non-MTP and MTP. |
-| `Q5_K_S` | 17.66 GiB | 17.95 GiB | +3.28 GiB / +3.32 GiB | Curated only for non-MTP 200K; MTP would be too tight for comfort. |
-| `Q5_K_M` | 18.17 GiB | 18.47 GiB | +3.79 GiB / +3.84 GiB | Too tight for the curated 24 GB set once KV/cache reserve is included. |
-| `UD-Q5_K_XL` | 18.66 GiB | 18.95 GiB | +4.28 GiB / +4.32 GiB | Not selected for 24 GB; expected to leave little or no reliable headroom. |
+| `IQ4_XS` | 14.38 GiB | 14.63 GiB | baseline | Removed from the active Qwen menu; useful fallback only if you need more reserve than these quality profiles leave. |
+| `Q4_K_M` | 15.66 GiB | 15.93 GiB | +1.28 GiB / +1.30 GiB | Skipped because Unsloth's Qwen3.6 examples and Dynamic 2.0 guidance point to `UD-Q4_K_XL` as the better Q4 target. |
+| `UD-Q4_K_XL` | 16.40 GiB | 16.68 GiB | +2.02 GiB / +2.05 GiB | Selected for both 256K-class slots. |
+| `Q5_K_S` | 17.66 GiB | 17.95 GiB | +3.28 GiB / +3.32 GiB | Verified fallback if you want roughly another 0.5 GB reserve. |
+| `Q5_K_M` | 18.17 GiB | 18.47 GiB | +3.79 GiB / +3.84 GiB | Selected for both 150K-class slots: non-MTP at 200K and MTP at 160K. |
+| `UD-Q5_K_XL` | 18.66 GiB | 18.95 GiB | +4.28 GiB / +4.32 GiB | Not selected for 24 GB; too little reserve once long context, compute buffers, and MTP draft cache are included. |
 
-The experimental `qwen36-27b-ngram-*` profiles are still isolated speed
-experiments, not recommended defaults for agent sessions. On current llama.cpp
-builds they use:
+Research/data sources behind the choices:
 
-```text
---spec-type ngram-mod --spec-ngram-mod-n-match 24 --spec-ngram-mod-n-min 12 --spec-ngram-mod-n-max 48
-```
+- [Unsloth Qwen3.6 docs](https://unsloth.ai/docs/models/qwen3.6): Qwen3.6 max context is 262,144; examples use `UD-Q4_K_XL`; MTP uses `draft-mtp`, gives no accuracy change, and needs about 1 GB extra headroom.
+- [Unsloth Dynamic 2.0 GGUFs](https://unsloth.ai/docs/basics/unsloth-dynamic-2.0-ggufs): Dynamic quants use model-specific layer selection and calibration, and Unsloth treats KL divergence as the primary quantization-error signal.
+- [Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192) and [Accelerating Large Language Model Decoding with Speculative Sampling](https://arxiv.org/abs/2302.01318): speculative decoding can preserve the target model distribution while speeding generation.
+- [Hugging Face KV-cache quantization](https://huggingface.co/blog/kv-cache-quantization), [KIVI](https://arxiv.org/abs/2402.02750), and [ExLlamaV2 Q4 cache evaluation](https://github.com/turboderp-org/exllamav2/blob/master/doc/qcache_eval.md): 4-bit KV/cache methods usually preserve quality closely enough to justify the memory savings for long context.
+- [llama.cpp k-quants](https://github.com/ggerganov/llama.cpp/pull/1684): larger base-weight quants generally track better perplexity, and `Q5_K_M` uses higher precision on important tensors than `Q5_K_S`.
 
 ### Why these contexts?
 
@@ -244,12 +254,15 @@ bytes_per_elem × ctx_tokens`.
 
 - **Qwen3.6-27B** is *not* a classic dense model. Only **16 of its 64
   layers** use full attention (GQA 24:4, head_dim 256); the other 48 are
-  Gated DeltaNet linear-attention with constant-size state. KV at 200K is
-  ~7 GB, leaving room for `IQ4_XS` weights (14.4 GB) on 24 GB.
-- **Qwen3.6-27B MTP** adds a small draft context. At native max context the
-  verified load has 5.00 GiB primary KV plus 320 MiB draft KV with `q4_1`.
+  Gated DeltaNet linear-attention with constant-size state. With `q4_1`, KV at
+  200K is 3.82 GiB and KV at native max is 5.00 GiB, leaving room for better
+  base-weight quants on 24 GB.
+- **Qwen3.6-27B MTP** adds a small draft context. At 245,760 tokens, the
+  verified MTP Dynamic Q4 load has 4.69 GiB primary KV plus 300 MiB draft KV
+  with `q4_1`.
 - Avoid `q4_0` KV for Qwen. For max context, `q4_1` is the compromise used
-  here; for conservative reliability, use the 200K `q8_0` profiles.
+  here; it is the reason higher-quality base weights fit without CPU layer
+  spill on a 24 GB GPU.
 
 If you want a different ctx, pass `-ContextOverride 65536` to `start-server.ps1`
 or edit [scripts/models.ps1](scripts/models.ps1).
@@ -301,7 +314,7 @@ Copilot and `llama-server` instead of guessing which side dropped the tool call:
 
 ```powershell
 # Terminal 1: keep llama-server on 8080
-.\scripts\start-server.ps1 -Model qwen36-27b
+.\scripts\start-server.ps1 -Model qwen36-27b-q5
 
 # Terminal 2: proxy Copilot traffic through 8090 and log raw request/response JSON
 node .\scripts\trace-openai-proxy.js --listen 8090 --target http://127.0.0.1:8080
@@ -318,15 +331,12 @@ or `server-returned-reasoning-without-tool_calls`, the failure is still on the
 model/template/parser side. The trace log contains full prompts and tool
 results, so treat `logs\openai-proxy-trace.jsonl` as sensitive.
 
-The standard 200K Qwen profiles deliberately keep KV cache at `q8_0`. The
-native-max profiles switch to `q4_1` KV because that is what lets the 262,144
-window fit on a 24 GB card without CPU layer spill. MTP uses llama.cpp's current
+All four active Qwen profiles use `q4_1` KV because that is what makes the
+higher-quality base weights fit at useful context sizes on a 24 GB card without
+CPU layer spill. MTP uses llama.cpp's current
 `--spec-type draft-mtp --spec-draft-n-max 2` flags; Unsloth notes that more
 draft tokens can be faster on some hardware, but acceptance drops sharply above
 2 in their MTP benchmark, so the catalog keeps the conservative value.
-
-The `qwen36-27b-ngram-*` profiles remain isolated experiments, not recommended
-defaults for Copilot agent sessions.
 
 ## Scripts
 
@@ -346,33 +356,28 @@ defaults for Copilot agent sessions.
 ## Measured GPU RAM
 
 Verified on **NVIDIA RTX 3090 (24 GiB)** running Windows with llama.cpp
-`b9219`, `--flash-attn on`, `--n-gpu-layers 99`, and `--no-mmproj` for the 27B
-profiles. The numbers below are llama.cpp load-time fit estimates and parsed KV
-details from `scripts\status-server.ps1`; they are the best signal for whether
+`b9219`, `--flash-attn on`, `--n-gpu-layers 99`, and `--no-mmproj` for the active
+Qwen 27B profiles. The numbers below are llama.cpp load-time fit estimates and
+parsed KV details from the status parser; they are the best signal for whether
 the model stays on GPU without CPU layer spill.
 
 | Key | KV | Context allocated | Layers on GPU | Fit estimate | KV details |
 | --- | -- | ----------------- | ------------- | ------------ | ---------- |
-| `qwen36-27b` | `q8_0` | 200,192 | 65/65 | 21,483 MiB used of 23,154 MiB free | 6.49 GiB primary KV |
+| `qwen36-27b-mtp-q5` | `q4_1` | 160,000 | 66/66 | 22,182 MiB used of 22,854 MiB free | 3.05 GiB primary KV + 195 MiB draft KV |
+| `qwen36-27b-mtp-quality-max` | `q4_1` | 245,760 | 66/66 | 22,424 MiB used of 22,854 MiB free | 4.69 GiB primary KV + 300 MiB draft KV |
+| `qwen36-27b-q5` | `q4_1` | 200,192 | 65/65 | 22,476 MiB used of 23,154 MiB free | 3.82 GiB primary KV |
 | `qwen36-27b-quality-max` | `q4_1` | 262,144 | 65/65 | 22,210 MiB used of 23,154 MiB free | 5.00 GiB primary KV |
-| `qwen36-27b-q5` | `q4_1` | 200,192 | 65/65 | 21,950 MiB used of 23,154 MiB free; leaves 1,203 MiB | 3.82 GiB primary KV |
-| `qwen36-27b-max` | `q4_1` | 262,144 | 65/65 | 20,138 MiB used of 23,154 MiB free | 5.00 GiB primary KV |
-| `qwen36-27b-mtp` | `q8_0` | 200,192 | 66/66 | 22,036 MiB used of 22,854 MiB free | 6.49 GiB primary KV plus draft KV |
-| `qwen36-27b-mtp-quality` | `q4_1` | 200,192 | 66/66 | 21,400 MiB used of 22,854 MiB free; leaves 1,453 MiB | 3.82 GiB primary KV + 244 MiB draft KV |
-| `qwen36-27b-mtp-max` | `q4_1` | 262,144 | 66/66 | 20,690 MiB used of 22,854 MiB free | 5.00 GiB primary KV + 320 MiB draft KV |
 
 Reproduce with:
 
 ```powershell
-.\scripts\start-server.ps1 -Model qwen36-27b
+.\scripts\start-server.ps1 -Model qwen36-27b-mtp-q5
 .\scripts\status-server.ps1
-.\scripts\start-server.ps1 -Model qwen36-27b-quality-max
+.\scripts\start-server.ps1 -Model qwen36-27b-mtp-quality-max
 .\scripts\status-server.ps1
 .\scripts\start-server.ps1 -Model qwen36-27b-q5
 .\scripts\status-server.ps1
-.\scripts\start-server.ps1 -Model qwen36-27b-mtp-quality
-.\scripts\status-server.ps1
-.\scripts\start-server.ps1 -Model qwen36-27b-mtp-max
+.\scripts\start-server.ps1 -Model qwen36-27b-quality-max
 .\scripts\status-server.ps1
 ```
 
