@@ -98,6 +98,63 @@ $ikReady = Get-LlamaServerLogSnapshot -Text $ikReadyLog
 Assert-Equal $ikReady.LoadState 'ready' 'ik ready LoadState'
 Assert-Equal $ikReady.ListenUrl 'http://127.0.0.1:8094' 'ik listen URL'
 
+$pollutedSignalLog = @'
+INFO [                    main] model loaded | tid="508" timestamp=1779282646
+INFO [                    main] HTTP server listening | tid="508" timestamp=1779282646 hostname="127.0.0.1" port="8094" n_threads_http="19"
+            if ($lastSignal -match 'HTTP server listening') {
+'@
+$pollutedSignal = Get-LlamaServerLogSnapshot -Text $pollutedSignalLog
+Assert-Equal $pollutedSignal.ListenUrl 'http://127.0.0.1:8094' 'polluted listen URL'
+Assert-Equal $pollutedSignal.LastSignalShort 'HTTP server listening on 127.0.0.1:8094' 'polluted last signal short'
+
+$metricsText = @'
+# HELP llamacpp:prompt_tokens_seconds Average prompt throughput in tokens/s.
+llamacpp:prompt_tokens_seconds 733.589
+llamacpp:predicted_tokens_seconds 38.6861
+llamacpp:requests_processing 1
+llamacpp:requests_deferred 2
+llamacpp:n_tokens_max 67015
+'@
+$slots = @(
+    [ordered]@{
+        id = 0
+        state = 0
+        n_ctx = 156160
+        n_predict = -1
+        n_past = $null
+        n_decoded = $null
+        n_remaining = $null
+    },
+    [pscustomobject]@{
+        id = 1
+        state = 'processing'
+        n_ctx = 156160
+        n_predict = 128
+        n_past = 4096
+        n_decoded = 64
+        n_remaining = 64
+    }
+)
+$telemetry = Get-LlamaEndpointTelemetrySnapshot -MetricsText $metricsText -Slots $slots
+Assert-Equal $telemetry.PromptTokensPerSecond 733.589 'telemetry prompt throughput'
+Assert-Equal $telemetry.PredictedTokensPerSecond 38.6861 'telemetry generation throughput'
+Assert-Equal $telemetry.RequestsProcessing 1 'telemetry requests processing'
+Assert-Equal $telemetry.RequestsDeferred 2 'telemetry requests deferred'
+Assert-Equal $telemetry.ContextHighWatermark 67015 'telemetry context high watermark'
+Assert-Equal $telemetry.TotalSlots 2 'telemetry total slots'
+Assert-Equal $telemetry.BusySlots 1 'telemetry busy slots'
+Assert-Equal $telemetry.Slots[0].StateLabel 'idle' 'telemetry idle slot label'
+Assert-Equal $telemetry.Slots[1].StateLabel 'processing' 'telemetry active slot label'
+Assert-Equal $telemetry.Slots[1].Decoded 64 'telemetry decoded tokens'
+Assert-Equal $telemetry.Slots[0].Context 156160 'telemetry hashtable slot context'
+Assert-Equal $telemetry.Slots[0].Id 0 'telemetry hashtable slot id'
+
+$nestedTelemetry = Get-LlamaEndpointTelemetrySnapshot -MetricsText $metricsText -Slots (, $slots)
+Assert-Equal $nestedTelemetry.TotalSlots 2 'telemetry nested slot count'
+Assert-Equal $nestedTelemetry.BusySlots 1 'telemetry nested busy slot count'
+Assert-Equal $nestedTelemetry.Slots[0].Id 0 'telemetry nested first slot id'
+Assert-Equal $nestedTelemetry.Slots[0].Context 156160 'telemetry nested first slot context'
+
 $loading = Get-LlamaServerLogSnapshot -Text @'
 main: loading model
 load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)
@@ -110,6 +167,13 @@ error loading model: out of memory
 '@
 Assert-Equal $failed.LoadState 'failed' 'failed LoadState'
 Assert-MatchText $failed.FailureLine 'out of memory' 'failure line'
+
+$readyIgnoresNoise = Get-LlamaServerLogSnapshot -Text @'
+INFO [                    main] HTTP server listening | tid="508" timestamp=1779282646 hostname="127.0.0.1" port="8094" n_threads_http="19"
+Failure     : [{"$mid":21,"value":"some exception transcript"}]
+'@
+Assert-Equal $readyIgnoresNoise.LoadState 'ready' 'ready ignores noise LoadState'
+Assert-Equal $readyIgnoresNoise.FailureLine $null 'ready ignores failure transcript'
 
 $mtpLog = @'
 llama_context: n_ctx         = 262144

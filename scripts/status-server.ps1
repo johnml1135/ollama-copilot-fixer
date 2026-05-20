@@ -105,11 +105,23 @@ Write-LlamaModelInfo -Info $info
 Write-LlamaServerLogStatus -Snapshot $snapshot -Info $info
 
 # -- Probe HTTP endpoint ------------------------------------------------------
-if ($info) {
+$baseUrl = $null
+if ($info -and (Test-LlamaInfoProperty $info 'Host') -and (Test-LlamaInfoProperty $info 'Port')) {
+    $baseUrl = "http://$($info.Host):$($info.Port)"
+} elseif ($snapshot -and $snapshot.ListenUrl) {
+    $baseUrl = $snapshot.ListenUrl.TrimEnd('/')
+} elseif ($info -and (Test-LlamaInfoProperty $info 'BaseUrl')) {
+    $baseUrl = $info.BaseUrl.TrimEnd('/')
+    if ($baseUrl.EndsWith('/v1')) {
+        $baseUrl = $baseUrl.Substring(0, $baseUrl.Length - 3)
+    }
+}
+
+if ($baseUrl) {
     Write-Host ""
     Write-Host "HTTP:" -ForegroundColor Cyan
-    $health = "http://$($info.Host):$($info.Port)/health"
-    $models = "http://$($info.Host):$($info.Port)/v1/models"
+    $health = "$baseUrl/health"
+    $models = "$baseUrl/v1/models"
     try {
         $h = Invoke-RestMethod -Uri $health -TimeoutSec 3
         $status = if ($h.status) { $h.status } else { 'ok' }
@@ -126,6 +138,23 @@ if ($info) {
     } catch {
         # not fatal
     }
+
+    $metricsText = $null
+    $slots = @()
+    try {
+        $metricsResponse = Invoke-WebRequest -Uri "$baseUrl/metrics" -TimeoutSec 3
+        $metricsText = $metricsResponse.Content
+    } catch {
+        # not fatal
+    }
+    try {
+        $slots = @(Invoke-RestMethod -Uri "$baseUrl/slots" -TimeoutSec 3)
+    } catch {
+        # not fatal
+    }
+
+    $telemetry = Get-LlamaEndpointTelemetrySnapshot -MetricsText $metricsText -Slots $slots
+    Write-LlamaEndpointTelemetryStatus -Telemetry $telemetry
 }
 
 # -- nvidia-smi snapshot if available ----------------------------------------

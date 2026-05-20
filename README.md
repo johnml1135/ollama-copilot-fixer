@@ -159,6 +159,7 @@ Installed skills:
 | Skill | Use it for |
 | ----- | ---------- |
 | `local-context-budget` | Inspecting prompt bloat, context reserve, and token-heavy Copilot sessions. |
+| `local-llama-failure-triage` | Diagnosing local Qwen/llama-server stalls, crashes, timeouts, and suspected OOMs. |
 | `local-repo-triage` | Finding only the files needed for a coding task before implementation. |
 | `local-subagent-delegation` | Using same-model fresh-context subagents for focused research or review. |
 | `local-tool-reliability` | Stabilizing Qwen/llama-server/LLM Gateway tool calls. |
