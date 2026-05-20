@@ -11,7 +11,7 @@ Keep local sessions inside the effective context budget of a single 24 GB GPU.
 ## Procedure
 
 1. Pick a budget tied to the model's effective context, not its claimed maximum.
-   - On a 24 GB GPU running Qwen3.x, treat **32K as the high-quality zone**, **64K as a soft ceiling**, and **>100K as degraded**.
+   - On a 24 GB GPU running Qwen3.x, use **16K for tool-heavy local agent work**, treat **32K as the high-quality upper comfort zone**, **64K as a soft research ceiling**, and **>100K as degraded**.
    - Keep `github.copilot.llm-gateway.defaultMaxTokens` below llama-server `--ctx-size` so generation, tool continuation, and reserve space still fit.
 2. Inspect prompt growth before changing settings.
    - Run `scripts\inspect-copilot-context.ps1` when available.

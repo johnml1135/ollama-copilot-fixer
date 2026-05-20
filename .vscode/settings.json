@@ -8,9 +8,8 @@
 
     // GitHub Copilot LLM Gateway — connects Copilot Chat to your local llama-server
     "github.copilot.llm-gateway.serverUrl": "http://127.0.0.1:8080",
-    "github.copilot.llm-gateway.apiKey": "",
     "github.copilot.llm-gateway.requestTimeout": 600000,
-    "github.copilot.llm-gateway.defaultMaxTokens": 64000,
+    "github.copilot.llm-gateway.defaultMaxTokens": 16384,
     "github.copilot.llm-gateway.defaultMaxOutputTokens": 4096,
     "github.copilot.llm-gateway.enableToolCalling": true,
     "github.copilot.llm-gateway.parallelToolCalling": false,

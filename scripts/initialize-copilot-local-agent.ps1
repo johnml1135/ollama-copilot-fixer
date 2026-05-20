@@ -37,7 +37,7 @@ param(
     [string]$RepoPath,
     [string]$ServerUrl = 'http://127.0.0.1:8080',
     [int]$RequestTimeout = 600000,
-    [int]$DefaultMaxTokens = 64000,
+    [int]$DefaultMaxTokens = 16384,
     [int]$DefaultMaxOutputTokens = 4096,
     [bool]$ParallelToolCalling = $false,
     [switch]$Force
@@ -261,7 +261,6 @@ $normalizedServerUrl = $ServerUrl.TrimEnd('/')
 $recommendedSettings = [ordered]@{
     'github.copilot.chat.agentDebugLog.fileLogging.enabled' = $true
     'github.copilot.llm-gateway.serverUrl' = $normalizedServerUrl
-    'github.copilot.llm-gateway.apiKey' = ''
     'github.copilot.llm-gateway.requestTimeout' = $RequestTimeout
     'github.copilot.llm-gateway.defaultMaxTokens' = $DefaultMaxTokens
     'github.copilot.llm-gateway.defaultMaxOutputTokens' = $DefaultMaxOutputTokens

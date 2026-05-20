@@ -101,6 +101,9 @@
     {%- if loop.index0 >= num_sys and message.role != 'system' and message.role != 'developer' -%}
         {%- set content = render_content(message.content, true)|trim -%}
         {%- if message.role == 'user' -%}
+            {%- if loop.index0 == ns.last_query_index and enable_thinking is defined and enable_thinking is false and '/no_think' not in content -%}
+                {%- set content = content + '\n/no_think' -%}
+            {%- endif -%}
             {{- '<|im_start|>user\n' + content + '<|im_end|>\n' -}}
         {%- elif message.role == 'assistant' -%}
             {%- set reasoning_content = '' -%}
@@ -165,7 +168,7 @@
 
 {%- if add_generation_prompt -%}
     {{- '<|im_start|>assistant\n' -}}
-    {%- if not (enable_thinking is defined and enable_thinking is false) -%}
+    {%- if enable_thinking is defined and enable_thinking is not none and enable_thinking -%}
         {{- '<think>\n' -}}
     {%- endif -%}
 {%- endif -%}

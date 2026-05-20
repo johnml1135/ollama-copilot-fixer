@@ -27,3 +27,4 @@ Thumbs.db
 
 # Ollama Copilot Fixer working dirs
 ollama_copilot_fixer_*/
+llama.log

@@ -44,7 +44,7 @@ function Read-LlamaLogLines {
         [int]$Tail = 800
     )
 
-    $signalPattern = 'common_params_fit_impl:|error loading model|failed to load|failed to bind|address already in use|out of memory|cannot allocate|cuda error|exception|aborted|fatal'
+    $signalPattern = 'common_params_fit_impl:|HTTP server listening|server is listening on|model loaded|error loading model|failed to load|failed to bind|address already in use|out of memory|cannot allocate|cuda error|exception|aborted|fatal'
     $lines = @()
     foreach ($path in @($LogFile, $ErrorLogFile)) {
         if (-not $path -or -not (Test-Path $path)) { continue }
@@ -254,6 +254,12 @@ function Get-LlamaServerLogSnapshot {
     if ($listen) {
         $listenLine = $listen.Value.Trim()
         $listenUrl = $listen.Groups[1].Value.Trim()
+    } else {
+        $listen = Get-LlamaLastRegexMatch -Lines $lines -Pattern 'HTTP server listening.+hostname="([^"]+)"\s+port="?([^"\s]+)"?'
+        if ($listen) {
+            $listenLine = $listen.Value.Trim()
+            $listenUrl = 'http://{0}:{1}' -f $listen.Groups[1].Value.Trim(), $listen.Groups[2].Value.Trim()
+        }
     }
 
     $failureLine = $null
@@ -267,6 +273,7 @@ function Get-LlamaServerLogSnapshot {
 
     $lastSignal = $null
     foreach ($pattern in @(
+            'HTTP server listening.+$',
             'main: server is listening on\s+.+$',
             'main: model loaded$',
             'srv\s+load_model: initializing slots.+$',
@@ -446,10 +453,10 @@ function Write-LlamaServerLogStatus {
         if ($Snapshot.OffloadedLayers -and $Snapshot.TotalLayers) {
             $line = "  Layers      : $($Snapshot.OffloadedLayers)/$($Snapshot.TotalLayers) on GPU"
             if ($Snapshot.RepeatingGpuLayers) { $line += " ($($Snapshot.RepeatingGpuLayers) repeating + output)" }
-            if ($Info -and $Info.PSObject.Properties.Name -contains 'GpuLayers') { $line += "; requested --n-gpu-layers $($Info.GpuLayers)" }
+            if ($Info -and $Info.PSObject.Properties.Name -contains 'GpuLayers') { $line += "; requested --gpu-layers $($Info.GpuLayers)" }
             Write-Host $line
         } elseif ($Info -and $Info.PSObject.Properties.Name -contains 'GpuLayers') {
-            Write-Host ("  Requested   : --n-gpu-layers {0}" -f $Info.GpuLayers)
+            Write-Host ("  Requested   : --gpu-layers {0}" -f $Info.GpuLayers)
         }
         if (@($Snapshot.GpuModelBuffers).Count -gt 0) {
             foreach ($buffer in @($Snapshot.GpuModelBuffers)) {

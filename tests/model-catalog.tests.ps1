@@ -45,12 +45,7 @@ function Assert-ContainsValue {
 }
 
 $expectedOrder = @(
-    'qwen36-27b-mtp-q5',
-    'qwen36-27b-mtp-quality-max',
-    'qwen36-27b-q5',
-    'qwen36-27b-quality-max',
-    'gemma4-26b-a4b',
-    'gemma4-31b'
+    'qwen36-27b-mtp-iq4-ks'
 )
 
 $actualOrder = @($global:LlamaModelCatalog.Keys)
@@ -60,46 +55,35 @@ for ($index = 0; $index -lt $expectedOrder.Count; $index++) {
 }
 
 $qwenKeys = @($global:LlamaModelCatalog.Keys | Where-Object { $_ -like 'qwen36-*' })
-Assert-Equal $qwenKeys.Count 4 'active Qwen profile count'
+Assert-Equal $qwenKeys.Count 1 'active Qwen profile count'
 
-$mtpQ5 = $global:LlamaModelCatalog['qwen36-27b-mtp-q5']
-Assert-Equal $mtpQ5.HFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'MTP Q5 repo'
-Assert-Equal $mtpQ5.HFFile 'Qwen3.6-27B-Q5_K_M.gguf' 'MTP Q5 file'
-Assert-Equal $mtpQ5.Quant 'Q5_K_M + MTP' 'MTP Q5 quant'
-Assert-Equal $mtpQ5.Context 160000 'MTP Q5 context'
-Assert-Equal $mtpQ5.CacheTypeK 'q4_1' 'MTP Q5 K cache type'
-Assert-Equal $mtpQ5.CacheTypeV 'q4_1' 'MTP Q5 V cache type'
-Assert-Equal $mtpQ5.NoMmproj $true 'MTP Q5 disables mmproj'
-Assert-ContainsValue $mtpQ5.ExtraArgs 'draft-mtp' 'MTP Q5 uses draft-mtp'
-Assert-ContainsValue $mtpQ5.ExtraArgs '2' 'MTP Q5 uses conservative draft limit'
-
-$mtpQualityMax = $global:LlamaModelCatalog['qwen36-27b-mtp-quality-max']
-Assert-Equal $mtpQualityMax.HFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'MTP quality max repo'
-Assert-Equal $mtpQualityMax.HFFile 'Qwen3.6-27B-UD-Q4_K_XL.gguf' 'MTP quality max file'
-Assert-Equal $mtpQualityMax.Quant 'UD-Q4_K_XL + MTP' 'MTP quality max quant'
-Assert-Equal $mtpQualityMax.Context 245760 'MTP quality max context'
-Assert-Equal $mtpQualityMax.CacheTypeK 'q4_1' 'MTP quality max K cache type'
-Assert-Equal $mtpQualityMax.CacheTypeV 'q4_1' 'MTP quality max V cache type'
-Assert-Equal $mtpQualityMax.NoMmproj $true 'MTP quality max disables mmproj'
-Assert-ContainsValue $mtpQualityMax.ExtraArgs 'draft-mtp' 'MTP quality max uses draft-mtp'
-Assert-ContainsValue $mtpQualityMax.ExtraArgs '2' 'MTP quality max uses conservative draft limit'
-
-$qualityMax = $global:LlamaModelCatalog['qwen36-27b-quality-max']
-Assert-Equal $qualityMax.HFRepo 'unsloth/Qwen3.6-27B-GGUF' 'quality max Qwen repo'
-Assert-Equal $qualityMax.HFFile 'Qwen3.6-27B-UD-Q4_K_XL.gguf' 'quality max Qwen file'
-Assert-Equal $qualityMax.Quant 'UD-Q4_K_XL' 'quality max Qwen quant'
-Assert-Equal $qualityMax.Context 262144 'quality max Qwen context'
-Assert-Equal $qualityMax.CacheTypeK 'q4_1' 'quality max Qwen K cache type'
-Assert-Equal $qualityMax.CacheTypeV 'q4_1' 'quality max Qwen V cache type'
-Assert-Equal $qualityMax.NoMmproj $true 'quality max Qwen disables mmproj'
-
-$q5 = $global:LlamaModelCatalog['qwen36-27b-q5']
-Assert-Equal $q5.HFRepo 'unsloth/Qwen3.6-27B-GGUF' 'Q5 Qwen repo'
-Assert-Equal $q5.HFFile 'Qwen3.6-27B-Q5_K_M.gguf' 'Q5 Qwen file'
-Assert-Equal $q5.Quant 'Q5_K_M' 'Q5 Qwen quant'
-Assert-Equal $q5.Context 200000 'Q5 Qwen context'
-Assert-Equal $q5.CacheTypeK 'q4_1' 'Q5 Qwen K cache type'
-Assert-Equal $q5.CacheTypeV 'q4_1' 'Q5 Qwen V cache type'
-Assert-Equal $q5.NoMmproj $true 'Q5 Qwen disables mmproj'
+$profile = $global:LlamaModelCatalog['qwen36-27b-mtp-iq4-ks']
+Assert-Equal $profile.HFRepo 'ubergarm/Qwen3.6-27B-GGUF' 'ik Qwen repo'
+Assert-Equal $profile.HFFile 'Qwen3.6-27B-MTP-IQ4_KS.gguf' 'ik Qwen file'
+Assert-Equal $profile.Quant 'IQ4_KS + MTP' 'ik Qwen quant'
+Assert-Equal $profile.Alias 'qwen3.6-27b-mtp-iq4-ks' 'ik Qwen alias'
+Assert-Equal $profile.Context 156000 'ik Qwen context'
+Assert-Equal $profile.CacheTypeK 'q8_0' 'ik Qwen K cache type'
+Assert-Equal $profile.CacheTypeV 'q8_0' 'ik Qwen V cache type'
+Assert-Equal $profile.Batch 2048 'ik Qwen batch size'
+Assert-Equal $profile.UBatch 512 'ik Qwen ubatch size'
+Assert-Equal $profile.Threads 8 'ik Qwen CPU threads'
+Assert-Equal $profile.ThreadsBatch 8 'ik Qwen batch CPU threads'
+Assert-Equal $profile.ThreadsMtmd 8 'ik Qwen mmproj CPU threads'
+Assert-Equal $profile.MmprojHFRepo 'unsloth/Qwen3.6-27B-MTP-GGUF' 'ik Qwen mmproj repo'
+Assert-Equal $profile.MmprojHFFile 'mmproj-BF16.gguf' 'ik Qwen mmproj file'
+Assert-Equal $profile.NoMmprojOffload $true 'ik Qwen keeps mmproj on CPU'
+Assert-Equal $profile.Reasoning 'on' 'ik Qwen reasoning default'
+Assert-ContainsValue $profile.ExtraArgs '--multi-token-prediction' 'ik Qwen uses built-in MTP'
+Assert-ContainsValue $profile.ExtraArgs '--draft-max' 'ik Qwen sets draft max'
+Assert-ContainsValue $profile.ExtraArgs '4' 'ik Qwen draft max value'
+Assert-ContainsValue $profile.ExtraArgs '--draft-p-min' 'ik Qwen sets draft p-min'
+Assert-ContainsValue $profile.ExtraArgs '0.0' 'ik Qwen draft p-min value'
+Assert-ContainsValue $profile.ExtraArgs '--merge-qkv' 'ik Qwen merges qkv'
+Assert-ContainsValue $profile.ExtraArgs '--merge-up-gate-experts' 'ik Qwen merges up/gate experts'
+Assert-ContainsValue $profile.ExtraArgs '--cache-ram' 'ik Qwen enables RAM cache'
+Assert-ContainsValue $profile.ExtraArgs '32768' 'ik Qwen RAM cache size'
+Assert-ContainsValue $profile.ExtraArgs '--ctx-checkpoints' 'ik Qwen enables context checkpoints'
+Assert-ContainsValue $profile.ExtraArgs '32' 'ik Qwen context checkpoint count'
 
 Write-Host 'model-catalog tests passed' -ForegroundColor Green

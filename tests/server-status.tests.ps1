@@ -89,6 +89,15 @@ Assert-MatchText $brief 'ready' 'brief readiness'
 Assert-MatchText $brief '65/65 layers on GPU' 'brief offload split'
 Assert-MatchText $brief 'ctx 200,192' 'brief context'
 
+$ikReadyLog = @'
+INFO [                    main] model loaded | tid="508" timestamp=1779282646
+INFO [                    main] HTTP server listening | tid="508" timestamp=1779282646 hostname="127.0.0.1" port="8094" n_threads_http="19"
+VERB [              start_loop] wait for new task | tid="508" timestamp=1779282646
+'@
+$ikReady = Get-LlamaServerLogSnapshot -Text $ikReadyLog
+Assert-Equal $ikReady.LoadState 'ready' 'ik ready LoadState'
+Assert-Equal $ikReady.ListenUrl 'http://127.0.0.1:8094' 'ik listen URL'
+
 $loading = Get-LlamaServerLogSnapshot -Text @'
 main: loading model
 load_tensors: loading model tensors, this can take a while... (mmap = true, direct_io = false)

@@ -1,12 +1,14 @@
 # Unsloth Llama Helper Scripts
 
-PowerShell helpers for running [Unsloth](https://unsloth.ai/) GGUF models on a
-single 24 GB NVIDIA GPU via [llama.cpp](https://github.com/ggml-org/llama.cpp)'s
+PowerShell helpers for running the Reddit-tested Qwen3.6 27B MTP IQ4_KS setup
+on a single 24 GB NVIDIA GPU via [ik_llama.cpp](https://github.com/ikawrakow/ik_llama.cpp)'s
 `llama-server`, exposed as an OpenAI-compatible endpoint for **VS Code GitHub
 Copilot Chat (BYOK)**, Cline, OpenCode, Claude Code Router, etc.
 
-No GGUF rebuilding. No Modelfiles. No Ollama. We just call llama-server with the
-parameters Unsloth itself recommends.
+No GGUF rebuilding. No Modelfiles. No Ollama. The active catalog intentionally
+has one supported choice: `ubergarm/Qwen3.6-27B-GGUF` /
+`Qwen3.6-27B-MTP-IQ4_KS.gguf` with the ik_llama.cpp parameters from the
+LocalLLaMA RTX 3090 recipe.
 
 ## Why not Ollama?
 
@@ -28,11 +30,11 @@ Copilot Chat, with full agent mode and tool calling support.
 ## Quick start
 
 ```powershell
-# 1. (first run only) download a prebuilt llama.cpp into tools\llama.cpp\
-.\scripts\install-llama.ps1            # CUDA build by default
+# 1. (first run only) clone and build ik_llama.cpp into tools\ik_llama.cpp\
+.\scripts\install-llama.ps1            # CUDA build for RTX 3090 by default
 
-# 2. pick a model from the menu and start the server in the background
-.\scripts\start-server.ps1             # auto-installs llama.cpp if missing
+# 2. start the single supported profile in the background
+.\scripts\start-server.ps1             # auto-builds ik_llama.cpp if missing
 
 # 3. check it
 .\scripts\status-server.ps1
@@ -42,8 +44,9 @@ Copilot Chat, with full agent mode and tool calling support.
 ```
 
 The server listens on `http://127.0.0.1:8080/v1` (OpenAI-compatible).
-First launch downloads the GGUF weights to `models\` (controlled via
-`$env:LLAMA_CACHE`).
+First launch downloads the GGUF model and CPU mmproj sidecar into `models\`.
+Set `HF_TOKEN` first if Hugging Face requires authentication in your
+environment.
 
 ## Wire VS Code Copilot Chat to it
 
@@ -63,9 +66,8 @@ override them in your user settings if needed:
 ```jsonc
 // .vscode/settings.json (already included in this repo)
 "github.copilot.llm-gateway.serverUrl": "http://127.0.0.1:8080",
-"github.copilot.llm-gateway.apiKey": "",
 "github.copilot.llm-gateway.requestTimeout": 600000,
-"github.copilot.llm-gateway.defaultMaxTokens": 64000,
+"github.copilot.llm-gateway.defaultMaxTokens": 16384,
 "github.copilot.llm-gateway.defaultMaxOutputTokens": 4096,
 "github.copilot.llm-gateway.enableToolCalling": true,
 "github.copilot.llm-gateway.parallelToolCalling": false,
@@ -77,11 +79,15 @@ override them in your user settings if needed:
 
 On this 24 GB Qwen setup, keep the advertised Copilot context inside the
 effective local budget rather than the model's theoretical max. The repo now
-defaults Copilot to **64K** tokens, which matches the soft ceiling used by the
-local context-budget skill and leaves reserve for generation and follow-up tool
-turns. Parallel tool calling is disabled by default because serial calls are
-slower but more reliable on local Qwen; turn it back on after your tool calls
-are stable.
+defaults Copilot to **16K** tokens for tool-heavy local agent work. The Qwen
+profile allocates much larger native context, but cold Copilot agent
+prompts with large tool schemas slow down sharply before they reach those
+limits: a 7.5K-token synthetic tool-schema probe took about 3 minutes on the RTX
+3090, and real 36K/58K-token Copilot prompts were canceled before prefill
+completed. You can raise this to **32K** for lighter chat or smaller tool
+surfaces once first turns are stable. Parallel tool calling is disabled by
+default because serial calls are slower but more reliable on local Qwen; turn it
+back on after your tool calls are stable.
 
 ### 3. Start the llama-server
 
@@ -89,7 +95,8 @@ are stable.
 ./scripts/start-server.ps1
 ```
 
-Pick a model from the menu. The server listens on `http://127.0.0.1:8080/v1`.
+The single supported model is started automatically. The server listens on
+`http://127.0.0.1:8080/v1`.
 
 ### 4. Verify the connection
 
@@ -104,7 +111,7 @@ Open the Command Palette (`Ctrl+Shift+P`) and run:
 2. Click the **model selector** dropdown at the bottom
 3. Click **"Manage Models..."**
 4. Select **"LLM Gateway"** as the provider
-5. Enable the model(s) you want to use
+5. Enable the local `qwen3.6-27b-mtp-iq4-ks` model
 
 The extension auto-discovers whatever model is currently loaded on llama-server.
 See [the extension docs](https://github.com/arbs-io/github-copilot-llm-gateway)
@@ -174,8 +181,9 @@ Headline numbers that drive the defaults:
 
 - RULER puts Qwen3-30B-A3B's *effective* context at **64K** despite a 128K
   claim — accuracy drops from 96.5 @ 4K to 79.2 @ 128K. The repo's installer
-  therefore defaults `defaultMaxTokens` to **64000**, while the skills treat
-  **32K as the high-quality zone** and **64K as a soft ceiling**.
+  therefore defaults `defaultMaxTokens` to **16384** for tool-heavy local agent
+  turns, while the skills treat **32K as the high-quality upper comfort zone**
+  and **64K as a soft research ceiling**.
 - Anthropic's multi-agent post shows token usage alone explains ~80% of agent
   performance variance, and that multi-agent systems use ~15× more tokens than
   chat — so on a single GPU with no parallelism, subagents are for *context
@@ -186,135 +194,108 @@ Headline numbers that drive the defaults:
   reliability skill recommends trimming the tool surface before debugging the
   parser.
 
-## Curated Qwen3.6 27B profiles (24 GB)
+## Single Qwen3.6 27B Profile
 
-Defined in [scripts/models.ps1](scripts/models.ps1). The active Qwen menu is
-intentionally capped at **four Qwen3.6 27B profiles**: MTP/non-MTP crossed with
-150K-class and 256K-class context targets. They are the first four menu entries,
-followed by the Gemma profiles.
+Defined in [scripts/models.ps1](scripts/models.ps1). The catalog intentionally
+contains exactly one entry:
 
-The short answer on quality tradeoffs:
+| Key | Backend | Model file | KV | Context | MTP | Vision |
+| --- | ------- | ---------- | -- | ------- | --- | ------ |
+| `qwen36-27b-mtp-iq4-ks` | `ik_llama.cpp` | `ubergarm/Qwen3.6-27B-GGUF` / `Qwen3.6-27B-MTP-IQ4_KS.gguf` | `q8_0` / `q8_0` | 156,000 | ik built-in MTP | `mmproj-BF16.gguf` on CPU |
 
-- **MTP does not intentionally degrade output quality.** Speculative decoding
-  papers describe target-model verification schemes that preserve the target
-  distribution, and Unsloth's Qwen3.6 MTP docs say MTP gives 1.4-2.2x faster
-  generation with no accuracy change. It does cost memory: Unsloth says to plan
-  for about 1 GB extra RAM/VRAM headroom.
-- **`q4_1` KV cache is a quality tradeoff, but a small one compared with
-  dropping the base weights.** Hugging Face's KV-cache quantization blog reports
-  int4 cache performing almost the same as fp16 on perplexity and comparable on
-  LongBench, while KIVI reports almost the same quality even with 2-bit KV using
-  an asymmetric scheme. ExLlamaV2's Q4 cache evaluation likewise reports very
-  little loss versus FP16. Qwen-specific llama.cpp discussion cautions that
-  `q4_0` can produce weird Qwen results, so this catalog avoids `q4_0` and uses
-  `q4_1`, which stores a scale plus minimum per block.
-- **Use smaller KV to buy better weights.** Published/blog data says int4 KV is
-  usually a minor degradation; llama.cpp's k-quant data shows base-weight
-  perplexity improves smoothly as model quant size increases; Unsloth Dynamic
-  2.0 explicitly optimizes layer selection against KL divergence. On this 24 GB
-  card, the best practical tradeoff is therefore `q4_1` KV plus `UD-Q4_K_XL` or
-  Q5 weights, not `q8_0` KV plus `IQ4_XS` weights.
+The profile uses the LocalLLaMA RTX 3090 recipe:
 
-All Qwen 27B profiles pass `--no-mmproj`. The Unsloth GGUF repos include a
-vision projector, but Copilot/Cline/OpenCode coding chat does not need it and it
-costs VRAM during load.
+```text
+--ctx-size 156000
+--cache-type-k q8_0
+--cache-type-v q8_0
+--flash-attn on
+--multi-token-prediction
+--draft-max 4
+--draft-p-min 0.0
+--merge-qkv
+--merge-up-gate-experts
+--cache-ram 32768
+--ctx-checkpoints 32
+--ctx-checkpoints-interval 512
+--ctx-checkpoints-tolerance 5
+--cache-ram-similarity 0.50
+--cache-ram-n-min 0
+--threads 8
+--threads-batch 8
+--threads-mtmd 8
+--batch-size 2048
+--ubatch-size 512
+--gpu-layers 99
+--split-mode none
+--main-gpu 0
+--parallel 1
+--cont-batching
+--reasoning on
+--reasoning-format deepseek
+--chat-template-kwargs {"tool_parser":"qwen3_coder","preserve_thinking":true}
+--mmproj <mmproj-BF16.gguf>
+--no-mmproj-offload
+--image-min-tokens 1024
+--image-max-tokens 4096
+```
 
-### Qwen configuration matrix
+The model file is about 16.2 GB. The mmproj sidecar is downloaded from
+`unsloth/Qwen3.6-27B-MTP-GGUF` because the ubergarm quant repo contains the
+IQ4_KS weight files but not the projector file.
 
-| Slot | Key | MTP | Weight quant | GGUF size | KV | Context | Speculative | Live fit on RTX 3090 | Reserve | Why this one |
-| ---- | --- | --- | ------------ | --------- | -- | ------- | ----------- | -------------------- | ------- | ------------ |
-| MTP, max quality, 150K-class | `qwen36-27b-mtp-q5` | yes | `Q5_K_M` | 18.47 GiB | `q4_1` | 160,000 | `draft-mtp`, draft max 2 | 66/66 GPU layers; 22,182 MiB used of 22,854 MiB free | about 672 MiB | Highest MTP weight quant that live-probed above 150K. Tight, but it answers the quality-first slot. |
-| MTP, max quality, 256K-class | `qwen36-27b-mtp-quality-max` | yes | `UD-Q4_K_XL` | 16.68 GiB | `q4_1` | 245,760 | `draft-mtp`, draft max 2 | 66/66 GPU layers; 22,424 MiB used of 22,854 MiB free | about 430 MiB | Best MTP weight quant that still stays within about 20K of native max. |
-| Non-MTP, max quality, 150K-class | `qwen36-27b-q5` | no | `Q5_K_M` | 18.17 GiB | `q4_1` | 200,192 allocated | none | 65/65 GPU layers; 22,476 MiB used of 23,154 MiB free | about 678 MiB | Highest non-MTP weight quant live-probed above 150K. Tight, but comparable to the MTP Q5 slot. |
-| Non-MTP, max quality, 256K-class | `qwen36-27b-quality-max` | no | `UD-Q4_K_XL` | 16.40 GiB | `q4_1` | 262,144 | none | 65/65 GPU layers; 22,210 MiB used of 23,154 MiB free | about 944 MiB | Native-max context with Unsloth's recommended Dynamic Q4 weights. |
-
-Exact Hugging Face file sizes checked for the 27B candidates:
-
-| Quant | Non-MTP GGUF | MTP GGUF | Delta vs `IQ4_XS` | Catalog decision |
-| ----- | ------------ | -------- | ----------------- | ---------------- |
-| `IQ4_XS` | 14.38 GiB | 14.63 GiB | baseline | Removed from the active Qwen menu; useful fallback only if you need more reserve than these quality profiles leave. |
-| `Q4_K_M` | 15.66 GiB | 15.93 GiB | +1.28 GiB / +1.30 GiB | Skipped because Unsloth's Qwen3.6 examples and Dynamic 2.0 guidance point to `UD-Q4_K_XL` as the better Q4 target. |
-| `UD-Q4_K_XL` | 16.40 GiB | 16.68 GiB | +2.02 GiB / +2.05 GiB | Selected for both 256K-class slots. |
-| `Q5_K_S` | 17.66 GiB | 17.95 GiB | +3.28 GiB / +3.32 GiB | Verified fallback if you want roughly another 0.5 GB reserve. |
-| `Q5_K_M` | 18.17 GiB | 18.47 GiB | +3.79 GiB / +3.84 GiB | Selected for both 150K-class slots: non-MTP at 200K and MTP at 160K. |
-| `UD-Q5_K_XL` | 18.66 GiB | 18.95 GiB | +4.28 GiB / +4.32 GiB | Not selected for 24 GB; too little reserve once long context, compute buffers, and MTP draft cache are included. |
-
-Research/data sources behind the choices:
-
-- [Unsloth Qwen3.6 docs](https://unsloth.ai/docs/models/qwen3.6): Qwen3.6 max context is 262,144; examples use `UD-Q4_K_XL`; MTP uses `draft-mtp`, gives no accuracy change, and needs about 1 GB extra headroom.
-- [Unsloth Dynamic 2.0 GGUFs](https://unsloth.ai/docs/basics/unsloth-dynamic-2.0-ggufs): Dynamic quants use model-specific layer selection and calibration, and Unsloth treats KL divergence as the primary quantization-error signal.
-- [Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192) and [Accelerating Large Language Model Decoding with Speculative Sampling](https://arxiv.org/abs/2302.01318): speculative decoding can preserve the target model distribution while speeding generation.
-- [Hugging Face KV-cache quantization](https://huggingface.co/blog/kv-cache-quantization), [KIVI](https://arxiv.org/abs/2402.02750), and [ExLlamaV2 Q4 cache evaluation](https://github.com/turboderp-org/exllamav2/blob/master/doc/qcache_eval.md): 4-bit KV/cache methods usually preserve quality closely enough to justify the memory savings for long context.
-- [llama.cpp k-quants](https://github.com/ggerganov/llama.cpp/pull/1684): larger base-weight quants generally track better perplexity, and `Q5_K_M` uses higher precision on important tensors than `Q5_K_S`.
-
-### Why these contexts?
-
-KV-cache memory ≈ `full_attn_layers × kv_heads × head_dim × 2 (k+v) ×
-bytes_per_elem × ctx_tokens`.
-
-- **Qwen3.6-27B** is *not* a classic dense model. Only **16 of its 64
-  layers** use full attention (GQA 24:4, head_dim 256); the other 48 are
-  Gated DeltaNet linear-attention with constant-size state. With `q4_1`, KV at
-  200K is 3.82 GiB and KV at native max is 5.00 GiB, leaving room for better
-  base-weight quants on 24 GB.
-- **Qwen3.6-27B MTP** adds a small draft context. At 245,760 tokens, the
-  verified MTP Dynamic Q4 load has 4.69 GiB primary KV plus 300 MiB draft KV
-  with `q4_1`.
-- Avoid `q4_0` KV for Qwen. For max context, `q4_1` is the compromise used
-  here; it is the reason higher-quality base weights fit without CPU layer
-  spill on a 24 GB GPU.
-
-If you want a different ctx, pass `-ContextOverride 65536` to `start-server.ps1`
-or edit [scripts/models.ps1](scripts/models.ps1).
+If 156K context is too tight on your Windows desktop, pass
+`-ContextOverride 128000` to [scripts/start-server.ps1](scripts/start-server.ps1).
+The Reddit thread also notes that q4 KV is the next fallback if you need more
+VRAM headroom, but this repo now keeps the requested q8 KV recipe as the only
+catalog choice.
 
 ## Sampler defaults
 
-From [Unsloth's Qwen3.6 docs](https://unsloth.ai/docs/models/qwen3.6) and
-[Gemma 4 docs](https://unsloth.ai/docs/models/gemma-4):
+From the LocalLLaMA recipe and Qwen coding defaults:
 
 | Family | temp | top_p | top_k | min_p | presence_penalty | repeat_penalty |
 | ------ | ---- | ----- | ----- | ----- | ---------------- | -------------- |
 | Qwen3.6 (precise coding, thinking) | 0.6 | 0.95 | 20 | 0.0 | 0.0 | 1.0 |
-| Gemma 4 (Google defaults)          | 1.0 | 0.95 | 64 | 0.0 | 0.0 | 1.0 |
 
-Disable thinking with `-NoThink`. The script merges `enable_thinking: false`
-into `LLAMA_CHAT_TEMPLATE_KWARGS` without dropping the Qwen tool-call fixes.
+Disable thinking with `-NoThink`. The script then switches to
+`--reasoning off` and merges `enable_thinking:false` into the chat-template
+kwargs without dropping the Qwen tool-call fixes.
 
 ### Qwen3.6 tool calling fixes
 
 Qwen3.6 models can leak reasoning content or fail to close `<thinking>` tags
 before outputting tool calls, causing strict XML-style parsing to fail with
-"Request failed" errors. VS Code Copilot Chat also does not reliably resend
-Qwen `reasoning_content` across tool turns, which makes long-horizon tool use
-degrade even after the template fix. That issue is especially noticeable on
-older builds and in the 35B-A3B profile; the 27B profile is the safer default
-for Copilot agent sessions. For Qwen3.6 profiles, `start-server.ps1` now uses
-the local fixed template at [scripts/templates/qwen36-tool-fix.jinja](scripts/templates/qwen36-tool-fix.jinja) and defaults to:
+"Request failed" errors. For the single Qwen3.6 profile,
+[scripts/start-server.ps1](scripts/start-server.ps1) uses the local fixed
+template at [scripts/templates/qwen36-tool-fix.jinja](scripts/templates/qwen36-tool-fix.jinja)
+and the Reddit reasoning-on settings:
+
+```powershell
+LLAMA_CHAT_TEMPLATE_KWARGS={"tool_parser":"qwen3_coder","preserve_thinking":true}
+--reasoning on
+--reasoning-format deepseek
+```
+
+`-NoThink` is still available if a client starts losing tool-call state across
+reasoning turns:
 
 ```powershell
 LLAMA_CHAT_TEMPLATE_KWARGS={"tool_parser":"qwen3_coder","enable_thinking":false}
 --reasoning off
 ```
 
-That uses the patched multi-turn Qwen template, selects the more forgiving Qwen
-coder tool parser, and avoids the Copilot reasoning-trace gap by keeping Qwen
-reasoning off by default. If your client does preserve reasoning traces, use
-`-EnableReasoning`; that switches Qwen back to:
-
-```powershell
-LLAMA_CHAT_TEMPLATE_KWARGS={"tool_parser":"qwen3_coder"}
---reasoning on
---reasoning-format deepseek
-```
-
-`-NoThink` still disables reasoning for non-Qwen families too.
+The no-think path deliberately does **not** seed an empty `<think></think>`
+assistant prefix. That earlier pattern could trigger llama-server's reasoning
+parser while reasoning was disabled and leave generation spinning at high CPU
+with little GPU progress.
 
 When Qwen still fails after a follow-up tool call, capture the boundary between
 Copilot and `llama-server` instead of guessing which side dropped the tool call:
 
 ```powershell
 # Terminal 1: keep llama-server on 8080
-.\scripts\start-server.ps1 -Model qwen36-27b-q5
+.\scripts\start-server.ps1
 
 # Terminal 2: proxy Copilot traffic through 8090 and log raw request/response JSON
 node .\scripts\trace-openai-proxy.js --listen 8090 --target http://127.0.0.1:8080
@@ -331,58 +312,53 @@ or `server-returned-reasoning-without-tool_calls`, the failure is still on the
 model/template/parser side. The trace log contains full prompts and tool
 results, so treat `logs\openai-proxy-trace.jsonl` as sensitive.
 
-All four active Qwen profiles use `q4_1` KV because that is what makes the
-higher-quality base weights fit at useful context sizes on a 24 GB card without
-CPU layer spill. MTP uses llama.cpp's current
-`--spec-type draft-mtp --spec-draft-n-max 2` flags; Unsloth notes that more
-draft tokens can be faster on some hardware, but acceptance drops sharply above
-2 in their MTP benchmark, so the catalog keeps the conservative value.
+To reproduce model-side behavior without involving Copilot, use the Python
+OpenAI-compatible probe. It runs a tiny chat, a two-step structured tool loop, a
+synthetic bloated tool schema, and an optional prompt-prefill stress, then
+summarizes the new llama-server timing lines:
+
+```powershell
+python .\scripts\probe-openai-models.py --tests basic,two-tools,schema-bloat --schema-kb 16
+python .\scripts\probe-openai-models.py --tests schema-bloat --schema-kb 32 --timeout-sec 420
+```
+
+Old upstream llama.cpp Q5 probes with a 32 KB synthetic schema pointed to cold tool-schema prefill as
+the limiting factor for giant Copilot agent prompts. After the ik migration,
+rerun [scripts/probe-openai-models.py](scripts/probe-openai-models.py) against
+the new profile before drawing conclusions from the older Q5 timings.
 
 ## Scripts
 
 | Script                          | Purpose                                                              |
 | ------------------------------- | -------------------------------------------------------------------- |
-| `scripts\install-llama.ps1`     | Download official llama.cpp Windows release (CUDA/Vulkan/CPU).       |
-| `scripts\start-server.ps1`      | Interactive menu, auto-installs llama.cpp, launches `llama-server`.  |
+| `scripts\install-llama.ps1`     | Clone and build `ikawrakow/ik_llama.cpp` from source (CUDA/CPU).     |
+| `scripts\start-server.ps1`      | Resolve the single profile, auto-build ik if missing, launch `llama-server`. |
 | `scripts\status-server.ps1`     | PID, model, /health probe, `nvidia-smi` snapshot.                    |
 | `scripts\stop-server.ps1`       | Stop the background server.                                          |
 | `scripts\trace-openai-proxy.js` | Logs raw OpenAI-compatible traffic between Copilot and `llama-server`. |
 | `scripts\analyze-openai-trace.ps1` | Summarizes whether traced responses contained structured tool calls. |
-| `scripts\models.ps1`            | Model catalog & sampler defaults (edit to add or tune profiles).     |
+| `scripts\probe-openai-models.py` | Sends controlled OpenAI-compatible chat/tool/schema probes and correlates them with llama-server timings. |
+| `scripts\models.ps1`            | Single-profile model catalog & sampler defaults.                     |
 | `scripts\benchmark-models.ps1`  | Loads each catalog model, measures VRAM, runs a one-shot inference.  |
 | `scripts\inspect-copilot-context.ps1` | Summarize Copilot prompt sizes and llama-server prompt tokens. |
 | `scripts\initialize-copilot-local-agent.ps1` | Install minimal-context skills and LLM Gateway settings into a repo or user profile. |
 
 ## Measured GPU RAM
 
-Verified on **NVIDIA RTX 3090 (24 GiB)** running Windows with llama.cpp
-`b9219`, `--flash-attn on`, `--n-gpu-layers 99`, and `--no-mmproj` for the active
-Qwen 27B profiles. The numbers below are llama.cpp load-time fit estimates and
-parsed KV details from the status parser; they are the best signal for whether
-the model stays on GPU without CPU layer spill.
-
-| Key | KV | Context allocated | Layers on GPU | Fit estimate | KV details |
-| --- | -- | ----------------- | ------------- | ------------ | ---------- |
-| `qwen36-27b-mtp-q5` | `q4_1` | 160,000 | 66/66 | 22,182 MiB used of 22,854 MiB free | 3.05 GiB primary KV + 195 MiB draft KV |
-| `qwen36-27b-mtp-quality-max` | `q4_1` | 245,760 | 66/66 | 22,424 MiB used of 22,854 MiB free | 4.69 GiB primary KV + 300 MiB draft KV |
-| `qwen36-27b-q5` | `q4_1` | 200,192 | 65/65 | 22,476 MiB used of 23,154 MiB free | 3.82 GiB primary KV |
-| `qwen36-27b-quality-max` | `q4_1` | 262,144 | 65/65 | 22,210 MiB used of 23,154 MiB free | 5.00 GiB primary KV |
-
-Reproduce with:
+The old upstream llama.cpp measurements have been removed from the active docs
+because the launcher now uses ik_llama.cpp, IQ4_KS weights, q8 KV, MTP, and a
+CPU mmproj sidecar. After the first ik run, use the status script to inspect
+actual Windows load behavior on this machine:
 
 ```powershell
-.\scripts\start-server.ps1 -Model qwen36-27b-mtp-q5
-.\scripts\status-server.ps1
-.\scripts\start-server.ps1 -Model qwen36-27b-mtp-quality-max
-.\scripts\status-server.ps1
-.\scripts\start-server.ps1 -Model qwen36-27b-q5
-.\scripts\status-server.ps1
-.\scripts\start-server.ps1 -Model qwen36-27b-quality-max
 .\scripts\status-server.ps1
 ```
 
-For automated sweeps, `scripts\benchmark-models.ps1` still records results to
-`logs\benchmark-results.json`, but the status parser is now the richer source
-for context, KV, GPU/CPU split, speculative decoding, and load state.
+The source Reddit recipe reported roughly **1261 tok/s prefill** and
+**72.9 tok/s decode** on an RTX 3090-class setup for a ~5.9K prompt and ~1K
+output. Treat those as target recipe numbers, not local verification. If the
+156K/q8 setup bumps into Windows CUDA system-memory fallback, first try
+`-ContextOverride 128000`; q4 KV is the next manual fallback, but it is no
+longer a separate catalog choice.
 
 ## VS Code tasks

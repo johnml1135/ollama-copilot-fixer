@@ -56,7 +56,12 @@ function Write-LlamaModelInfo {
     if (Test-LlamaInfoProperty $Info 'Reasoning') { Write-Host ("  Reasoning   : {0}" -f $Info.Reasoning) }
     if (Test-LlamaInfoProperty $Info 'CacheTypeK') { Write-Host ("  KV cache    : K {0}, V {1}" -f $Info.CacheTypeK, $Info.CacheTypeV) }
     if (Test-LlamaInfoProperty $Info 'Batch') { Write-Host ("  Batch       : n_batch {0}, n_ubatch {1}" -f $Info.Batch, $Info.UBatch) }
-    if (Test-LlamaInfoProperty $Info 'NoMmproj' -and $Info.NoMmproj) { Write-Host "  Vision      : mmproj disabled" }
+    if (Test-LlamaInfoProperty $Info 'NoMmprojOffload' -and $Info.NoMmprojOffload) {
+        Write-Host "  Vision      : CPU mmproj (--no-mmproj-offload)"
+        if (Test-LlamaInfoProperty $Info 'MmprojPath') { Write-Host ("  mmproj      : {0}" -f $Info.MmprojPath) }
+    } elseif (Test-LlamaInfoProperty $Info 'NoMmproj' -and $Info.NoMmproj) {
+        Write-Host "  Vision      : mmproj disabled"
+    }
     if (Test-LlamaInfoProperty $Info 'Speculative') { Write-Host ("  Speculative : {0}" -f $Info.Speculative) }
     if (Test-LlamaInfoProperty $Info 'TemplateKwargs') { Write-Host ("  Template    : {0}" -f $Info.TemplateKwargs) }
     if (Test-LlamaInfoProperty $Info 'Temp') {
