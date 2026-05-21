@@ -13,5 +13,23 @@
     "github.copilot.llm-gateway.defaultMaxOutputTokens": 4096,
     "github.copilot.llm-gateway.enableToolCalling": true,
     "github.copilot.llm-gateway.parallelToolCalling": false,
-    "github.copilot.llm-gateway.agentTemperature": 0.0
+    "github.copilot.llm-gateway.agentTemperature": 0.0,
+
+    // Keep local-agent context lean and predictable.
+    "github.copilot.chat.skillTool.enabled": true,
+    "github.copilot.chat.summarizeAgentConversationHistory.enabled": true,
+    "chat.useCustomizationsInParentRepositories": false,
+
+    "search.exclude": {
+        "**/logs/**": true,
+        "**/models/**": true,
+        "**/tools/ik_llama.cpp/**": true,
+        "**/tools/llama.cpp/**": true
+    },
+    "files.watcherExclude": {
+        "**/logs/**": true,
+        "**/models/**": true,
+        "**/tools/ik_llama.cpp/**": true,
+        "**/tools/llama.cpp/**": true
+    }
 }

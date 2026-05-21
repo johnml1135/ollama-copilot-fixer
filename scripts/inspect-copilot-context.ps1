@@ -61,6 +61,81 @@ Get-ChildItem $LogDir |
     Select-Object Name, @{Name='KB'; Expression={ [math]::Round($_.Length / 1KB, 1) }}, LastWriteTime |
     Format-Table -AutoSize
 
+Write-Host "Prompt sidecars" -ForegroundColor Cyan
+Get-ChildItem $LogDir -File |
+    Where-Object { $_.Name -match '^(system_prompt_\d+|tools_\d+|models)\.json$' } |
+    Sort-Object Length -Descending |
+    ForEach-Object {
+        [pscustomobject]@{
+            Name         = $_.Name
+            KB           = [math]::Round($_.Length / 1KB, 1)
+            ApproxTokens = [math]::Round($_.Length / 4)
+            LastWrite    = $_.LastWriteTime
+        }
+    } |
+    Format-Table -AutoSize
+
+$largestSystemPrompt = Get-ChildItem $LogDir -Filter 'system_prompt_*.json' -File |
+    Sort-Object Length -Descending |
+    Select-Object -First 1
+
+if ($largestSystemPrompt) {
+    try {
+        $systemPromptJson = Get-Content $largestSystemPrompt.FullName -Raw | ConvertFrom-Json
+        $systemPromptText = ($systemPromptJson.content -as [string]) -replace '\\n', "`n"
+        $skillsSection = [regex]::Match($systemPromptText, '(?s)<skills>.*?</skills>').Value
+
+        Write-Host "Largest system prompt summary" -ForegroundColor Cyan
+        [pscustomobject]@{
+            File               = $largestSystemPrompt.Name
+            Chars              = $systemPromptText.Length
+            ApproxTokens       = [math]::Round($systemPromptText.Length / 4)
+            SkillCount         = ([regex]::Matches($skillsSection, '<skill>')).Count
+            SkillSectionKB     = [math]::Round($skillsSection.Length / 1KB, 1)
+            SkillSectionTokens = [math]::Round($skillsSection.Length / 4)
+        } |
+            Format-List
+    } catch {
+        Write-Host "Could not parse $($largestSystemPrompt.Name): $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+$latestTools = Get-ChildItem $LogDir -Filter 'tools_*.json' -File |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+
+if ($latestTools) {
+    try {
+        $toolsOuter = Get-Content $latestTools.FullName -Raw | ConvertFrom-Json
+        $toolsContent = $toolsOuter.content -as [string]
+        $tools = $toolsContent | ConvertFrom-Json
+
+        Write-Host "Tool schema summary" -ForegroundColor Cyan
+        [pscustomobject]@{
+            File         = $latestTools.Name
+            ToolCount    = $tools.Count
+            ContentKB    = [math]::Round($toolsContent.Length / 1KB, 1)
+            ApproxTokens = [math]::Round($toolsContent.Length / 4)
+        } |
+            Format-List
+
+        Write-Host "Largest tool schemas" -ForegroundColor Cyan
+        $tools |
+            ForEach-Object {
+                $toolJson = $_ | ConvertTo-Json -Depth 100 -Compress
+                [pscustomobject]@{
+                    Name = $_.name
+                    KB   = [math]::Round($toolJson.Length / 1KB, 1)
+                }
+            } |
+            Sort-Object KB -Descending |
+            Select-Object -First 15 |
+            Format-Table -AutoSize
+    } catch {
+        Write-Host "Could not parse $($latestTools.Name): $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 $events = Get-Content $mainJsonl | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json }
 
 Write-Host "LLM requests" -ForegroundColor Cyan

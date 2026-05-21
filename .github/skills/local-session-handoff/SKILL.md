@@ -1,6 +1,6 @@
 ---
 name: local-session-handoff
-description: 'Use when: a local Copilot chat is getting long, prompt tokens are too high, a fresh chat is needed, work must be checkpointed, or context should be compressed for Qwen.'
+description: 'Use when a local Copilot/Qwen chat is too long and needs compaction, checkpointing, restart, or a handoff summary.'
 argument-hint: '[current work to checkpoint]'
 ---
 

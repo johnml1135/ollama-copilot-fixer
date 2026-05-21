@@ -1,6 +1,6 @@
 ---
 name: local-subagent-delegation
-description: 'Use when: local Qwen or another local Copilot model should delegate to subagents, isolate context, run focused read-only research, review changes, or summarize findings back to the main agent.'
+description: 'Use when local Qwen/Copilot should delegate isolated research, review, or summarization to subagents without bloating parent context.'
 argument-hint: '[subtask to delegate]'
 ---
 

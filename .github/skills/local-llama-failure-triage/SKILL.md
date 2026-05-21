@@ -1,6 +1,6 @@
 ---
 name: local-llama-failure-triage
-description: 'Use when: local Qwen, llama-server, ik_llama.cpp, or Copilot local agent died, stalled, timed out, was suspected to OOM, or needs log-based failure diagnosis.'
+description: 'Use when local Qwen, llama-server, or ik_llama.cpp dies, stalls, times out, OOMs, cancels, or needs log-based failure diagnosis.'
 argument-hint: '[symptom, timestamp, or failing request]'
 ---
 

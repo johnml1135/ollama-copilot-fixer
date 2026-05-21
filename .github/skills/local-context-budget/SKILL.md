@@ -1,6 +1,6 @@
 ---
 name: local-context-budget
-description: 'Use when: local Copilot, LLM Gateway, Qwen, reduced context, prompt bloat, token budget, context window, 24GB GPU, or local chats time out from huge prompts.'
+description: 'Use when local Copilot/Qwen/LLM Gateway hits prompt bloat, context limits, slow prefill, timeouts, or 24GB GPU token-budget issues.'
 argument-hint: '[symptom or target token budget]'
 ---
 

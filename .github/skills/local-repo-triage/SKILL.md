@@ -1,6 +1,6 @@
 ---
 name: local-repo-triage
-description: 'Use when: starting a coding task with a local agent, minimizing repository context, finding relevant files, avoiding broad workspace reads, or preparing a compact implementation brief.'
+description: 'Use when a local-agent coding task needs minimal repo context, targeted file discovery, compact search, or a small implementation brief.'
 argument-hint: '[task or bug to triage]'
 ---
 

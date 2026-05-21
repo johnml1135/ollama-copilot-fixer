@@ -1,6 +1,6 @@
 ---
 name: local-tool-reliability
-description: 'Use when: local Copilot tool calls fail, Qwen emits malformed tool calls, llama-server returns empty responses, tools are described instead of executed, or LLM Gateway agent mode is flaky.'
+description: 'Use when local Copilot/Qwen tool calls fail, malformed tool JSON appears, tools are skipped, or LLM Gateway agent mode is flaky.'
 argument-hint: '[tool-call symptom or error message]'
 ---
 
